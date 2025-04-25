@@ -1,6 +1,6 @@
 # Data
-Data/
-Data/
+/Data
+
 
 # Jupyter
 *.ipynb_checkpoints
