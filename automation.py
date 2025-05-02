@@ -1,16 +1,27 @@
 import geopandas as gpd
 import sys
 
-def check_osc_duplicates(shapefile_path):
+import geopandas as gpd
+import os
+
+def check_osc_duplicates(workspace):
     """
-    Checks for duplicated OSC values in a shapefile's LINKED_AGG column.
+    Checks for duplicated OSC values in the OUT_Closures.shp's LINKED_AGG column.
     
     Args:
-        shapefile_path (str): Path to the shapefile (.shp)
+        workspace (str): Path to the directory containing OUT_Closures.shp
     
     Returns:
         bool: True if duplicates found, False if no duplicates, None if errors occurred
     """
+    # Construct full path to shapefile
+    shapefile_path = os.path.join(workspace, "OUT_Closures.shp")
+    
+    # Verify file exists
+    if not os.path.isfile(shapefile_path):
+        print(f"⛔ Error: OUT_Closures.shp not found in workspace: {workspace}")
+        return None
+
     try:
         # Read shapefile
         gdf = gpd.read_file(shapefile_path)
