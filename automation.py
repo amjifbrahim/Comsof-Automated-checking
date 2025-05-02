@@ -4,6 +4,9 @@ import os
 import pandas as pd
 
 __all__ = ['check_osc_duplicates', 'check_invalid_cable_refs']
+#########################################################################
+#######################check_invalid_cable_refs##########################
+#########################################################################
 
 def check_invalid_cable_refs(workspace):
     """
@@ -54,6 +57,10 @@ def check_invalid_cable_refs(workspace):
             print(f"❌ {layer}CablePieces: Found {len(invalid_pieces)} invalid CableID references.")
             print(invalid_pieces[["CABLE_ID"]].drop_duplicates().to_string(index=False))
         print("-" * 60)
+
+#########################################################################
+###########################check_osc_duplicates##########################
+#########################################################################
 
 def check_osc_duplicates(workspace):
     """
