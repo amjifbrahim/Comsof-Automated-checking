@@ -1,8 +1,9 @@
 import geopandas as gpd
 import sys
-
-import geopandas as gpd
 import os
+import pandas as pd
+
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs']
 
 def check_osc_duplicates(workspace):
     """
@@ -52,7 +53,9 @@ def check_osc_duplicates(workspace):
         return False
     
 
-#############################################################################"
+#############################################################################
+
+
 def check_invalid_cable_refs(workspace):
     """
     Checks all cable piece shapefiles against their corresponding cable shapefiles
