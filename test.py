@@ -1,6 +1,3 @@
-import geopandas as gpd
-import os
-
 def check_invalid_cable_refs(workspace):
     """
     Checks all cable piece shapefiles against their corresponding cable shapefiles
@@ -50,4 +47,3 @@ def check_invalid_cable_refs(workspace):
             print(f"❌ {layer}CablePieces: Found {len(invalid_pieces)} invalid CableID references.")
             print(invalid_pieces[["CABLE_ID"]].drop_duplicates().to_string(index=False))
         print("-" * 60)
-

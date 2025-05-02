@@ -1,6 +1,9 @@
 import geopandas as gpd
 import sys
 import os
+import pandas as pd
+
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs']
 
 def check_invalid_cable_refs(workspace):
     """
@@ -100,5 +103,4 @@ def check_osc_duplicates(workspace):
         return False
     
 
-#############################################################################"
 
