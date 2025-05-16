@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure']
 #########################################################################
 #######################check_invalid_cable_refs##########################
 #########################################################################
@@ -108,6 +108,65 @@ def check_osc_duplicates(workspace):
     else:
         print("\n✅ Everything is okay - no duplicated OSCs found!")
         return False
+    
+#########################################################################
+###########################check_splice_overload##########################
+#########################################################################
+
+def report_splice_counts_by_closure(workspace):
+    """
+    Reports the number of splices per closure in the Comsof export directory,
+    grouped by closure type (IDENTIFIER).
+
+    Parameters:
+    workspace (str): Path to the Comsof output folder
+
+    Returns:
+    None – prints a formatted table
+    """
+    closure_file = os.path.join(workspace, "OUT_Closures.shp")
+    splice_file = os.path.join(workspace, "OUT_Splices.shp")
+
+    print(f"\n🔍 Reporting splices per closure type in:\n{workspace}\n")
+
+    if not os.path.exists(closure_file):
+        print("❌ Missing file: OUT_Closures.shp")
+        return
+    if not os.path.exists(splice_file):
+        print("❌ Missing file: OUT_Splices.shp")
+        return
+
+    # Load shapefiles
+    closures = gpd.read_file(closure_file)
+    splices = gpd.read_file(splice_file)
+
+    # Count splices per closure ID
+    splice_counts = splices["ID"].value_counts().reset_index()
+    splice_counts.columns = ["ID", "SpliceCount"]
+
+    # Merge counts into closures
+    closures["ID"] = closures["ID"].astype(str)
+    splice_counts["ID"] = splice_counts["ID"].astype(str)
+    report_df = closures[["IDENTIFIER", "ID"]].copy()
+    report_df = report_df.merge(splice_counts, on="ID", how="left")
+    report_df["SpliceCount"] = report_df["SpliceCount"].fillna(0).astype(int)
+
+    # Sort and print
+    report_df.sort_values(by="SpliceCount", ascending=False, inplace=True)
+
+    print(f"{'Closure Type (IDENTIFIER)':<30} {'Closure ID (ID)':<20} {'# Splices':<10}")
+    print("-" * 65)
+
+    for _, row in report_df.iterrows():
+        identifier = row['IDENTIFIER'] if pd.notnull(row['IDENTIFIER']) else 'N/A'
+        closure_id = str(row['ID']) if pd.notnull(row['ID']) else 'N/A'
+        splice_count = row['SpliceCount']
+        print(f"{identifier:<30} {closure_id:<20} {splice_count:<10}")
+
+    print("\n✅ Report complete.\n")
+
+
+
     
 
 
