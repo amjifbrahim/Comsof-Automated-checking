@@ -286,7 +286,7 @@ def check_gistool_id(workspace):
         seg_gdf = gpd.read_file(seg_path)
         
         # Check for required columns
-        required_cols = ['TYPE', 'GISTOOL_ID']
+        required_cols = ['TYPE', 'GISTOOL_ID', 'ID']
         missing_cols = [col for col in required_cols if col not in seg_gdf.columns]
         if missing_cols:
             print(f"⛔ Error: Missing required columns: {', '.join(missing_cols)}")
@@ -304,11 +304,14 @@ def check_gistool_id(workspace):
             print("\n⚠️  Issues found in UsedSegments:")
             print(f"Found {len(problem_segments)} aerial/buried segments with non-empty GISTOOL_ID")
             print("GISTOOL_ID should be empty for aerial/buried segments:")
+            print("Showing first 5 problematic segments:\n")
             
-            # Create simplified report
-            report = problem_segments[['TYPE', 'GISTOOL_ID', 'SEGMENT_ID']].copy()
+            # Create simplified report with ID column
+            report = problem_segments[['TYPE', 'GISTOOL_ID', 'ID']].copy().head(5)
             report['GISTOOL_ID'] = report['GISTOOL_ID'].apply(lambda x: f"'{x}'" if pd.notna(x) else '')
-            print(report[['TYPE', 'GISTOOL_ID', 'SEGMENT_ID']].to_string(index=False))
+            
+            # Format as table with aligned columns
+            print(report[['TYPE', 'GISTOOL_ID', 'ID']].to_string(index=False))
             
             return True
         else:
