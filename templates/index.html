@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIS Validation Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .card { margin-bottom: 20px; }
+        .success { background-color: #d4edda; }
+        .error { background-color: #f8d7da; }
+        .warning { background-color: #fff3cd; }
+        .result-card { transition: all 0.3s ease; }
+        .result-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="text-center">GIS Validation Tool</h2>
+                    </div>
+                    
+                    <div class="card-body">
+                        <p class="text-center">Upload your project ZIP file for validation</p>
+                        
+                        {% if error %}
+                            <div class="alert alert-danger">{{ error }}</div>
+                        {% endif %}
+                        
+                        <form method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <input class="form-control" type="file" name="file" accept=".zip" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Validate Project</button>
+                        </form>
+                        
+                        {% if filename %}
+                            <div class="mt-4">
+                                <h4>Validation Results for: {{ filename }}</h4>
+                                
+                                {% for name, result in results %}
+                                    <div class="card result-card 
+                                        {% if result[0] is none %}error
+                                        {% elif result[0] %}warning
+                                        {% else %}success{% endif %}">
+                                        <div class="card-header">
+                                            <h5>{{ name }}</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <pre style="white-space: pre-wrap;">{{ result[1] }}</pre>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="card-footer text-muted text-center">
+                        <small>Supports MRO_*.zip files with output directory structure</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
