@@ -21,8 +21,25 @@
                 <div class="card shadow">
                     <div class="card-header bg-primary text-white">
                         <h2 class="text-center">GIS Validation Tool</h2>
-                    </div>
+                    {% for name, status, message in results %}
+                        <div class="card result-card 
+                            {% if status is none %}error
+                            {% elif status %}warning
+                            {% else %}success{% endif %}">
+                            <div class="card-header">
+                                <h5>{{ name }}</h5>
+                            </div>
+                            <div class="card-body">
+                                <pre style="white-space: pre-wrap;">{{ message }}</pre>
+                            </div>
+                        </div>
+                    {% endfor %}
                     
+                    {% if results %}
+                        <div class="card-footer text-muted text-center">
+                            <small>Results for: {{ filename }}</small>
+                        </div>
+                    {% endif %}
                     <div class="card-body">
                         <p class="text-center">Upload your project ZIP file for validation</p>
                         

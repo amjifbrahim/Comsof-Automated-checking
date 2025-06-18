@@ -3,7 +3,7 @@ import zipfile
 import tempfile
 import shutil
 from flask import Flask, render_template, request, send_file, after_this_request
-from automation import check_osc_duplicates, check_invalid_cable_refs, report_splice_counts_by_closure, process_shapefiles, check_gistool_id
+from automation_for_app import check_osc_duplicates, process_shapefiles, check_gistool_id
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
@@ -61,7 +61,7 @@ def index():
             workspace = extract_zip(zip_path, extract_dir)
             
             if not workspace:
-                 # Generate directory tree for debugging
+                # Generate directory tree for debugging
                 tree = []
                 for root, dirs, files in os.walk(extract_dir):
                     level = root.replace(extract_dir, '').count(os.sep)
@@ -75,18 +75,18 @@ def index():
                     'index.html', 
                     error=f"Could not find output folder in ZIP structure. Directory structure:<pre>{'\n'.join(tree)}</pre>"
                 )
-                        
+            
             # Run validation checks
             results = []
             for name, func in [
                 ("OSC Duplicates Check", check_osc_duplicates),
-                ("checking invalid identifiers", process_shapefiles),
-                ("GISTOOL_ID Validation", check_gistool_id),
-                ("GISTOOL_ID Validation", report_splice_counts_by_closure),
-                ("GISTOOL_ID Validation", check_invalid_cable_refs)
+                ("Shapefile Processing", process_shapefiles),
+                ("GISTOOL_ID Validation", check_gistool_id)
             ]:
+                # Call the function and get the result tuple
                 result = func(workspace)
-                results.append((name, result))
+                # Store both the status and message in results
+                results.append((name, result[0], result[1]))
             
             # Cleanup temporary files
             @after_this_request
