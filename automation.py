@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles']
 #########################################################################
 #######################check_invalid_cable_refs##########################
 #########################################################################
@@ -166,7 +166,94 @@ def report_splice_counts_by_closure(workspace):
     print("\n✅ Report complete.\n")
 
 
-
+#########################################################################
+#######################check_invalid_identifiers##########################
+#########################################################################
     
+import geopandas as gpd
+import os
 
+def process_shapefiles(workspace):
+    """
+    Processes OUT_FeederCables.shp and OUT_Closures.shp in the given workspace:
+    1. For FeederCables: Ensures IDENTIFIER column exists and is filled with "Breakout"
+    2. For Closures: Checks for non-virtual closures (VIRTUAL=0) with empty IDENTIFIER
+    
+    Args:
+        workspace (str): Path to the directory containing shapefiles
+    
+    Returns:
+        bool: True if errors found in closures, False if no errors, None if critical errors
+    """
+    try:
+        # ==================================================================
+        # Process OUT_FeederCables.shp
+        # ==================================================================
+        feeder_path = os.path.join(workspace, "OUT_FeederCables.shp")
+        
+        if not os.path.exists(feeder_path):
+            print(f"⛔ Error: OUT_FeederCables.shp not found in {workspace}")
+            return None
+        
+        feeder_gdf = gpd.read_file(feeder_path)
+        
+        # Create IDENTIFIER column if missing
+        if 'IDENTIFIER' not in feeder_gdf.columns:
+            feeder_gdf['IDENTIFIER'] = "Breakout"
+            modified = True
+        else:
+            # Fill empty values in existing IDENTIFIER column
+            mask = feeder_gdf['IDENTIFIER'].isna() | (feeder_gdf['IDENTIFIER'] == '')
+            if mask.any():
+                feeder_gdf.loc[mask, 'IDENTIFIER'] = "Breakout"
+                modified = True
+            else:
+                modified = False
+        
+        # Save changes if any modifications were made
+        if modified:
+            feeder_gdf.to_file(feeder_path, driver='ESRI Shapefile')
+            print("✅ Feeder cables: IDENTIFIER column has been updated with 'Breakout' values")
+        else:
+            print("✅ Feeder cables: IDENTIFIER column was already populated")
+
+        # ==================================================================
+        # Process OUT_Closures.shp
+        # ==================================================================
+        closures_path = os.path.join(workspace, "OUT_Closures.shp")
+        
+        if not os.path.exists(closures_path):
+            print(f"⛔ Error: OUT_Closures.shp not found in {workspace}")
+            return None
+        
+        closures_gdf = gpd.read_file(closures_path)
+        errors_found = False
+        
+        # Check for required columns
+        if 'IDENTIFIER' not in closures_gdf.columns:
+            print("⛔ Error: 'IDENTIFIER' column not found in OUT_Closures.shp")
+            return None
+            
+        if 'VIRTUAL' not in closures_gdf.columns:
+            print("⛔ Error: 'VIRTUAL' column not found in OUT_Closures.shp")
+            return None
+        
+        # Find problematic closures (non-virtual with empty identifier)
+        mask = (closures_gdf['VIRTUAL'] == 0) & (closures_gdf['IDENTIFIER'].isna() | (closures_gdf['IDENTIFIER'] == ''))
+        problem_closures = closures_gdf[mask]
+        
+        if not problem_closures.empty:
+            print("\n⚠️  Problem found in closures:")
+            print(f"Found {len(problem_closures)} non-virtual closures with empty IDENTIFIER")
+            print("These require manual attention:\n")
+            print(problem_closures[['IDENTIFIER', 'VIRTUAL']].to_string(index=False))
+            errors_found = True
+        else:
+            print("\n✅ All non-virtual closures have valid IDENTIFIER values")
+        
+        return errors_found
+        
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
+        return None
 
