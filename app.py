@@ -3,7 +3,7 @@ import zipfile
 import tempfile
 import shutil
 from flask import Flask, render_template, request, send_file, after_this_request
-from automation_for_app import check_osc_duplicates, process_shapefiles, check_gistool_id
+from automation_for_app import check_osc_duplicates, process_shapefiles, check_gistool_id, check_invalid_cable_refs, report_splice_counts_by_closure
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
@@ -78,14 +78,16 @@ def index():
             
             # Run validation checks
             results = []
-            for name, func in [
+            checks = [
                 ("OSC Duplicates Check", check_osc_duplicates),
+                ("Cable Reference Validation", check_invalid_cable_refs),
                 ("Shapefile Processing", process_shapefiles),
-                ("GISTOOL_ID Validation", check_gistool_id)
-            ]:
-                # Call the function and get the result tuple
+                ("GISTOOL_ID Validation", check_gistool_id),
+                ("Splice Count Report", report_splice_counts_by_closure)  # New report
+            ]
+            
+            for name, func in checks:
                 result = func(workspace)
-                # Store both the status and message in results
                 results.append((name, result[0], result[1]))
             
             # Cleanup temporary files
