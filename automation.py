@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id']
 #########################################################################
 #######################check_invalid_cable_refs##########################
 #########################################################################
@@ -257,3 +257,64 @@ def process_shapefiles(workspace):
         print(f"⛔ Unexpected error: {e}")
         return None
 
+
+#########################################################################
+########################## check_gistool_id #############################
+#########################################################################
+
+
+def check_gistool_id(workspace):
+    """
+    Checks for non-empty GISTOOL_ID values in aerial or buried segments of OUT_UsedSegments.shp
+    
+    Args:
+        workspace (str): Path to the directory containing shapefiles
+    
+    Returns:
+        bool: True if issues found (non-empty GISTOOL_ID), False if no issues, None if errors
+    """
+    try:
+        # Construct path to UsedSegments shapefile
+        seg_path = os.path.join(workspace, "OUT_UsedSegments.shp")
+        
+        # Verify file exists
+        if not os.path.isfile(seg_path):
+            print(f"⛔ Error: OUT_UsedSegments.shp not found in {workspace}")
+            return None
+        
+        # Read shapefile
+        seg_gdf = gpd.read_file(seg_path)
+        
+        # Check for required columns
+        required_cols = ['TYPE', 'GISTOOL_ID']
+        missing_cols = [col for col in required_cols if col not in seg_gdf.columns]
+        if missing_cols:
+            print(f"⛔ Error: Missing required columns: {', '.join(missing_cols)}")
+            return None
+        
+        # Filter aerial and buried segments with non-empty GISTOOL_ID
+        aerial_buried_mask = seg_gdf['TYPE'].isin(['AERIAL', 'BURIED'])
+        non_empty_mask = ~seg_gdf['GISTOOL_ID'].isna() & (seg_gdf['GISTOOL_ID'] != '')
+        
+        # Combine masks
+        problem_mask = aerial_buried_mask & non_empty_mask
+        problem_segments = seg_gdf[problem_mask]
+        
+        if not problem_segments.empty:
+            print("\n⚠️  Issues found in UsedSegments:")
+            print(f"Found {len(problem_segments)} aerial/buried segments with non-empty GISTOOL_ID")
+            print("GISTOOL_ID should be empty for aerial/buried segments:")
+            
+            # Create simplified report
+            report = problem_segments[['TYPE', 'GISTOOL_ID', 'SEGMENT_ID']].copy()
+            report['GISTOOL_ID'] = report['GISTOOL_ID'].apply(lambda x: f"'{x}'" if pd.notna(x) else '')
+            print(report[['TYPE', 'GISTOOL_ID', 'SEGMENT_ID']].to_string(index=False))
+            
+            return True
+        else:
+            print("\n✅ All aerial and buried segments have empty GISTOOL_ID values")
+            return False
+            
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
+        return None
