@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields']
 #########################################################################
 #######################check_invalid_cable_refs##########################
 #########################################################################
@@ -166,7 +166,272 @@ def report_splice_counts_by_closure(workspace):
     print("\n✅ Report complete.\n")
 
 
+#########################################################################
+#######################check_invalid_identifiers##########################
+#########################################################################
 
+def process_shapefiles(workspace):
+    """
+    Processes OUT_FeederCables.shp and OUT_Closures.shp in the given workspace:
+    1. For FeederCables: Ensures IDENTIFIER column exists and is filled with "Breakout"
+    2. For Closures: Checks for non-virtual closures (VIRTUAL=0) with empty IDENTIFIER
     
+    Args:
+        workspace (str): Path to the directory containing shapefiles
+    
+    Returns:
+        bool: True if errors found in closures, False if no errors, None if critical errors
+    """
+    try:
+        # ==================================================================
+        # Process OUT_FeederCables.shp
+        # ==================================================================
+        feeder_path = os.path.join(workspace, "OUT_FeederCables.shp")
+        
+        if not os.path.exists(feeder_path):
+            print(f"⛔ Error: OUT_FeederCables.shp not found in {workspace}")
+            return None
+        
+        feeder_gdf = gpd.read_file(feeder_path)
+        
+        # Create IDENTIFIER column if missing
+        if 'IDENTIFIER' not in feeder_gdf.columns:
+            feeder_gdf['IDENTIFIER'] = "Breakout"
+            modified = True
+        else:
+            # Fill empty values in existing IDENTIFIER column
+            mask = feeder_gdf['IDENTIFIER'].isna() | (feeder_gdf['IDENTIFIER'] == '')
+            if mask.any():
+                feeder_gdf.loc[mask, 'IDENTIFIER'] = "Breakout"
+                modified = True
+            else:
+                modified = False
+        
+        # Save changes if any modifications were made
+        if modified:
+            feeder_gdf.to_file(feeder_path, driver='ESRI Shapefile')
+            print("✅ Feeder cables: IDENTIFIER column has been updated with 'Breakout' values")
+        else:
+            print("✅ Feeder cables: IDENTIFIER column was already populated")
+
+        # ==================================================================
+        # Process OUT_Closures.shp
+        # ==================================================================
+        closures_path = os.path.join(workspace, "OUT_Closures.shp")
+        
+        if not os.path.exists(closures_path):
+            print(f"⛔ Error: OUT_Closures.shp not found in {workspace}")
+            return None
+        
+        closures_gdf = gpd.read_file(closures_path)
+        errors_found = False
+        
+        # Check for required columns
+        if 'IDENTIFIER' not in closures_gdf.columns:
+            print("⛔ Error: 'IDENTIFIER' column not found in OUT_Closures.shp")
+            return None
+            
+        if 'VIRTUAL' not in closures_gdf.columns:
+            print("⛔ Error: 'VIRTUAL' column not found in OUT_Closures.shp")
+            return None
+        
+        # Find problematic closures (non-virtual with empty identifier)
+        mask = (closures_gdf['VIRTUAL'] == 0) & (closures_gdf['IDENTIFIER'].isna() | (closures_gdf['IDENTIFIER'] == ''))
+        problem_closures = closures_gdf[mask]
+        
+        if not problem_closures.empty:
+            print("\n⚠️  Problem found in closures:")
+            print(f"Found {len(problem_closures)} non-virtual closures with empty IDENTIFIER")
+            print("These require manual attention:\n")
+            print(problem_closures[['IDENTIFIER', 'VIRTUAL']].to_string(index=False))
+            errors_found = True
+        else:
+            print("\n✅ All non-virtual closures have valid IDENTIFIER values")
+        
+        return errors_found
+        
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
+        return None
+
+
+#########################################################################
+########################## check_gistool_id #############################
+#########################################################################
+
+
+def check_gistool_id(workspace):
+    """
+    Checks for non-empty GISTOOL_ID values in aerial or buried segments of OUT_UsedSegments.shp
+    
+    Args:
+        workspace (str): Path to the directory containing shapefiles
+    
+    Returns:
+        bool: True if issues found (non-empty GISTOOL_ID), False if no issues, None if errors
+    """
+    try:
+        # Construct path to UsedSegments shapefile
+        seg_path = os.path.join(workspace, "OUT_UsedSegments.shp")
+        
+        # Verify file exists
+        if not os.path.isfile(seg_path):
+            print(f"⛔ Error: OUT_UsedSegments.shp not found in {workspace}")
+            return None
+        
+        # Read shapefile
+        seg_gdf = gpd.read_file(seg_path)
+        
+        # Check for required columns
+        required_cols = ['TYPE', 'GISTOOL_ID', 'ID']
+        missing_cols = [col for col in required_cols if col not in seg_gdf.columns]
+        if missing_cols:
+            print(f"⛔ Error: Missing required columns: {', '.join(missing_cols)}")
+            return None
+        
+        # Filter aerial and buried segments with non-empty GISTOOL_ID
+        aerial_buried_mask = seg_gdf['TYPE'].isin(['AERIAL', 'BURIED'])
+        non_empty_mask = ~seg_gdf['GISTOOL_ID'].isna() & (seg_gdf['GISTOOL_ID'] != '')
+        
+        # Combine masks
+        problem_mask = aerial_buried_mask & non_empty_mask
+        problem_segments = seg_gdf[problem_mask]
+        
+        if not problem_segments.empty:
+            print("\n⚠️  Issues found in UsedSegments:")
+            print(f"Found {len(problem_segments)} aerial/buried segments with non-empty GISTOOL_ID")
+            print("GISTOOL_ID should be empty for aerial/buried segments:")
+            print("Showing first 5 problematic segments:\n")
+            
+            # Create simplified report with ID column
+            report = problem_segments[['TYPE', 'GISTOOL_ID', 'ID']].copy().head(5)
+            report['GISTOOL_ID'] = report['GISTOOL_ID'].apply(lambda x: f"'{x}'" if pd.notna(x) else '')
+            
+            # Format as table with aligned columns
+            print(report[['TYPE', 'GISTOOL_ID', 'ID']].to_string(index=False))
+            
+            return True
+        else:
+            print("\n✅ All aerial and buried segments have empty GISTOOL_ID values")
+            return False
+            
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
+        return None
+    
+#########################################################################
+########################## check_cluster_overlaps #############################
+#########################################################################
+
+def check_cluster_overlaps(workspace, cluster_files=None):
+    """
+    Detects overlapping features within each cluster layer shapefile.
+    This is essential for YAML generation in Comsof.
+
+    Args:
+        workspace (str): Path to Comsof output directory containing .shp files.
+        cluster_files (list, optional): List of filenames to check. 
+            Defaults to standard Comsof cluster layers.
+
+    Returns:
+        None – prints the overlap check results.
+    """
+    import geopandas as gpd
+    import os
+
+    if cluster_files is None:
+        cluster_files = [
+            "OUT_DropClusters.shp",
+            "OUT_DistributionClusters.shp",
+            "OUT_DistributionCableClusters.shp",
+            "OUT_PrimDistributionClusters.shp",
+            "OUT_PrimDistributionCableClusters.shp",
+            "OUT_FeederClusters.shp",
+            "OUT_FeederCableClusters.shp"
+        ]
+
+    print("\n🔍 Running cluster self-overlap checks...\n")
+
+    for file in cluster_files:
+        path = os.path.join(workspace, file)
+
+        if not os.path.isfile(path):
+            print(f"⚠️ File not found: {file}")
+            continue
+
+        try:
+            gdf = gpd.read_file(path)
+            gdf = gdf[gdf.geometry.notnull()].reset_index(drop=True)
+
+            # Use spatial index to efficiently detect intersections
+            overlaps = []
+            for idx, geom in gdf.geometry.items():
+                candidates = gdf.sindex.query(geom, predicate="intersects")
+                for j in candidates:
+                    if idx < j and geom.intersects(gdf.geometry[j]):
+                        overlaps.append((idx, j))
+
+            if overlaps:
+                print(f"❌ {file}: {len(overlaps)} overlaps found:")
+                for a, b in overlaps[:5]:  # show only first 5
+                    if "CableClusters" in file:
+                        id_a = gdf.loc[a].get("CAB_GROUP", a)
+                        id_b = gdf.loc[b].get("CAB_GROUP", b)
+                        print(f"   • Cluster CAB_GROUP {id_a} overlaps with CAB_GROUP {id_b}")
+                    else:
+                        id_a = gdf.loc[a].get("AGG_ID", a)
+                        id_b = gdf.loc[b].get("AGG_ID", b)
+                        print(f"   • Cluster AGG_ID {id_a} overlaps with Cluster AGG_ID {id_b}")
+            else:
+                print(f"✅ {file}: No overlaps detected.")
+
+        except Exception as e:
+            print(f"⛔ Error processing {file}: {e}")
+
+#########################################################################
+########################## check_granularity_fields #############################
+#########################################################################
+
+def check_granularity_fields(workspace):
+    """
+    Validates that CABLEGRAN and BUNDLEGRAN fields are not set to -1 
+    in all OUT_<Layer>Cables.shp files (Feeder, Drop, Distribution, PrimDistribution).
+
+    Args:
+        workspace (str): Path to Comsof export folder.
+
+    Returns:
+        None - Prints validation results.
+    """
+    import geopandas as gpd
+    import os
+
+    cable_layers = ["Feeder", "Drop", "Distribution", "PrimDistribution"]
+
+    print("\n🔍 Checking CABLEGRAN and BUNDLEGRAN values in cable layers...\n")
+
+    for layer in cable_layers:
+        file_path = os.path.join(workspace, f"OUT_{layer}Cables.shp")
+
+        if not os.path.exists(file_path):
+            print(f"⚠️ Missing: OUT_{layer}Cables.shp")
+            continue
+
+        try:
+            gdf = gpd.read_file(file_path)
+            if 'CABLEGRAN' not in gdf.columns or 'BUNDLEGRAN' not in gdf.columns:
+                print(f"❌ {file_path} is missing required fields CABLEGRAN or BUNDLEGRAN.")
+                continue
+
+            invalid_rows = gdf[(gdf['CABLEGRAN'] == -1) | (gdf['BUNDLEGRAN'] == -1)]
+
+            if not invalid_rows.empty:
+                print(f"❌ Found {len(invalid_rows)} invalid rows in OUT_{layer}Cables.shp")
+                print(invalid_rows[['CABLE_ID', 'CABLEGRAN', 'BUNDLEGRAN']].head(5).to_string(index=False))
+            else:
+                print(f"✅ OUT_{layer}Cables.shp: All granularity values are valid.")
+
+        except Exception as e:
+            print(f"⛔ Error reading {file_path}: {e}")
 
 

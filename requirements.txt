@@ -1,2 +1,4 @@
 pyyaml 
 geopandas
+os
+requests
