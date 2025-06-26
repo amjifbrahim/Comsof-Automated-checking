@@ -5,7 +5,7 @@ import shutil
 from flask import Flask, render_template, request, send_file, after_this_request
 from automation_for_app import check_osc_duplicates, process_shapefiles, check_gistool_id, check_invalid_cable_refs, report_splice_counts_by_closure
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 50MB limit
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 
 def extract_zip(zip_path, extract_to):
