@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields']
 
 
 
