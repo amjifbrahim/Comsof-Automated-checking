@@ -267,3 +267,116 @@ def report_splice_counts_by_closure(workspace):
     
 
 
+#################################################################################################
+
+def check_cluster_overlaps(workspace, cluster_files=None):
+    """
+    Detects overlapping features within each cluster layer shapefile.
+    Returns: (has_issues: bool, message: str)
+    """
+    import geopandas as gpd
+    import os
+
+    output = ["🔍 Running cluster self-overlap checks...\n"]
+    try:
+        if cluster_files is None:
+            cluster_files = [
+                "OUT_DropClusters.shp",
+                "OUT_DistributionClusters.shp",
+                "OUT_DistributionCableClusters.shp",
+                "OUT_PrimDistributionClusters.shp",
+                "OUT_PrimDistributionCableClusters.shp",
+                "OUT_FeederClusters.shp",
+                "OUT_FeederCableClusters.shp"
+            ]
+
+        issues_found = False
+        for file in cluster_files:
+            path = os.path.join(workspace, file)
+            if not os.path.isfile(path):
+                output.append(f"⚠️ File not found: {file}")
+                continue
+
+            gdf = gpd.read_file(path)
+            gdf = gdf[gdf.geometry.notnull()].reset_index(drop=True)
+
+            overlaps = []
+            # spatial index for performance
+            sindex = gdf.sindex
+            for idx, geom in gdf.geometry.items():
+                candidates = sindex.query(geom, predicate="intersects")
+                for j in candidates:
+                    if idx < j and geom.intersects(gdf.geometry[j]):
+                        overlaps.append((idx, j))
+
+            if overlaps:
+                issues_found = True
+                output.append(f"❌ {file}: {len(overlaps)} overlaps found:")
+                for a, b in overlaps[:5]:
+                    if "CableClusters" in file:
+                        id_a = gdf.loc[a].get("CAB_GROUP", a)
+                        id_b = gdf.loc[b].get("CAB_GROUP", b)
+                        output.append(f"   • Cluster CAB_GROUP {id_a} overlaps with CAB_GROUP {id_b}")
+                    else:
+                        id_a = gdf.loc[a].get("AGG_ID", a)
+                        id_b = gdf.loc[b].get("AGG_ID", b)
+                        output.append(f"   • Cluster AGG_ID {id_a} overlaps with Cluster AGG_ID {id_b}")
+            else:
+                output.append(f"✅ {file}: No overlaps detected.")
+
+            output.append("-" * 60)
+
+        return issues_found, "\n".join(output)
+
+    except Exception as e:
+        output.append(f"⛔ Error running cluster overlap checks: {e}")
+        return None, "\n".join(output)
+
+
+#################################################################################################
+
+def check_granularity_fields(workspace):
+    """
+    Validates that CABLEGRAN and BUNDLEGRAN fields are not set to -1 
+    in all OUT_<Layer>Cables.shp files.
+    Returns: (has_issues: bool, message: str)
+    """
+    import geopandas as gpd
+    import os
+
+    output = ["🔍 Checking CABLEGRAN and BUNDLEGRAN values in cable layers...\n"]
+    try:
+        cable_layers = ["Feeder", "Drop", "Distribution", "PrimDistribution"]
+        issues_found = False
+
+        for layer in cable_layers:
+            file_name = f"OUT_{layer}Cables.shp"
+            path = os.path.join(workspace, file_name)
+            if not os.path.isfile(path):
+                output.append(f"⚠️ Missing: {file_name}")
+                continue
+
+            gdf = gpd.read_file(path)
+            if 'CABLEGRAN' not in gdf.columns or 'BUNDLEGRAN' not in gdf.columns:
+                output.append(f"❌ {file_name} is missing CABLEGRAN or BUNDLEGRAN fields.")
+                issues_found = True
+                continue
+
+            invalid = gdf[(gdf['CABLEGRAN'] == -1) | (gdf['BUNDLEGRAN'] == -1)]
+            if not invalid.empty:
+                issues_found = True
+                count = len(invalid)
+                output.append(f"❌ {file_name}: {count} invalid rows:")
+                # show up to 5 rows
+                preview = invalid[['CABLE_ID', 'CABLEGRAN', 'BUNDLEGRAN']].head(5)
+                output.append(preview.to_string(index=False))
+            else:
+                output.append(f"✅ {file_name}: All granularity values are valid.")
+
+            output.append("-" * 60)
+
+        return issues_found, "\n".join(output)
+
+    except Exception as e:
+        output.append(f"⛔ Error checking granularity fields: {e}")
+        return None, "\n".join(output)
