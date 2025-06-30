@@ -3,7 +3,12 @@ import zipfile
 import tempfile
 import shutil
 from flask import Flask, render_template, request, send_file, after_this_request
-from automation_for_app import check_osc_duplicates, process_shapefiles, check_gistool_id, check_invalid_cable_refs, report_splice_counts_by_closure
+from automation_for_app import (
+    check_osc_duplicates, check_invalid_cable_refs,
+    report_splice_counts_by_closure, process_shapefiles,
+    check_gistool_id, check_cluster_overlaps, check_granularity_fields
+)
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 50MB limit
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
@@ -83,8 +88,10 @@ def index():
                 ("Cable Reference Validation", check_invalid_cable_refs),
                 ("Shapefile Processing", process_shapefiles),
                 ("GISTOOL_ID Validation", check_gistool_id),
-                ("Splice Count Report", report_splice_counts_by_closure)  # New report
-            ]
+                ("Splice Count Report", report_splice_counts_by_closure),
+                ("Cluster Overlaps Check", check_cluster_overlaps),
+                ("Granularity Fields Check", check_granularity_fields),
+                ]
             
             for name, func in checks:
                 result = func(workspace)
