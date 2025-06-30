@@ -18,3 +18,10 @@ __pycache__/
 *.geojsons
 
 config/secrets.yml
+
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.DS_Store
+.env
