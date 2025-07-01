@@ -71,7 +71,7 @@ def process_shapefiles(workspace):
         
         if modified:
             feeder_gdf.to_file(feeder_path, driver='ESRI Shapefile')
-            output.append("✅ Feeder cables: IDENTIFIER column has been updated with 'Breakout' values")
+            output.append("⛔ Feeder cables: IDENTIFIER column needs to be updated with 'Breakout' values")
         else:
             output.append("✅ Feeder cables: IDENTIFIER column was already populated")
 
