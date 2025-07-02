@@ -88,18 +88,18 @@ def check_osc_duplicates(workspace):
         return None
 
     # Check for required column
-    if 'LINKED_AGG' not in gdf.columns:
-        print("⛔ Error: 'LINKED_AGG' column not found in the shapefile")
+    if 'ID' not in gdf.columns:
+        print("⛔ Error: 'ID' column not found in the shapefile")
         return None
 
     # Check for duplicates
-    duplicates = gdf['LINKED_AGG'].duplicated(keep=False)
+    duplicates = gdf['ID'].duplicated(keep=False)
     
     if duplicates.any():
         print("\n⚠️  We have a problem of duplicated OSCs! ⚠️")
         print(f"Total duplicated entries: {duplicates.sum()}")
         
-        duplicates_df = gdf[duplicates]['LINKED_AGG'].value_counts().reset_index()
+        duplicates_df = gdf[duplicates]['ID'].value_counts().reset_index()
         duplicates_df.columns = ['OSC Value', 'Duplicate Count']
         
         print("\nDuplicate occurrences:")
