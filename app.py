@@ -89,7 +89,8 @@ def index():
                 ("Cluster Overlap Check", check_cluster_overlaps),
                 ("Cable Granularity Check", check_granularity_fields),
                 ("Non-virtual Closure Validation", validate_non_virtual_closures),
-                ("Point Location Validation", validate_feeder_primdistribution_locations),  # New
+                ("Point Location Validation", validate_feeder_primdistribution_locations),
+                ("Cable Diameter Validation", validate_cable_diameters),  # New
                 ("Cable Reference Validation", check_invalid_cable_refs),
                 ("Shapefile Processing", process_shapefiles),
                 ("GISTOOL_ID Validation", check_gistool_id),
