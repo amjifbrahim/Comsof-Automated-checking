@@ -543,3 +543,49 @@ def validate_cable_diameters(workspace):
         "OUT_PrimDistributionCables.shp"
     ]
     
+    try:
+        output.append("\n🔍 Validating cable diameters...")
+        any_errors = False
+        
+        for file in cable_files:
+            file_path = os.path.join(workspace, file)
+            file_errors = False
+            
+            if not os.path.exists(file_path):
+                output.append(f"⛔ Error: {file} not found in workspace")
+                any_errors = True
+                continue
+                
+            gdf = gpd.read_file(file_path)
+            
+            if 'DIAMETER' not in gdf.columns:
+                output.append(f"⛔ Error: {file} is missing DIAMETER column")
+                any_errors = True
+                continue
+                
+            # Find invalid diameters (missing or zero)
+            invalid_mask = gdf['DIAMETER'].isna() | (gdf['DIAMETER'] == 0)
+            invalid_cables = gdf[invalid_mask]
+            
+            if not invalid_cables.empty:
+                has_issues = True
+                file_errors = True
+                any_errors = True
+                output.append(f"\n❌ PROBLEM: Found {len(invalid_cables)} cables with invalid diameters in {file}")
+                output.append("Cables must have non-zero diameter values")
+                
+                # Show sample of problematic cables
+                sample = invalid_cables[['CABLE_ID', 'DIAMETER']].head(5)
+                output.append("\nSample of problematic cables:")
+                output.append(sample.to_string(index=False))
+            else:
+                output.append(f"\n✅ {file}: All cables have valid diameters")
+        
+        if not any_errors:
+            output.append("\n✅ All cable files have valid diameter values")
+            
+        return has_issues, "\n".join(output)
+        
+    except Exception as e:
+        output.append(f"⛔ Unexpected error: {e}")
+        return None, "\n".join(output)
