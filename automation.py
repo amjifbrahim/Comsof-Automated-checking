@@ -566,63 +566,64 @@ def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
 
 
 #################################################################################
-################ validate_feeder_primdistribution_locations #####################
+########################### validate_cable_diameters ############################
 #################################################################################
 
 
-def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
+import os
+import geopandas as gpd
+
+def validate_cable_diameters(workspace):
     """
-    Validates that Feeder Points and Primary Distribution Points are not co-located.
+    Validates that DIAMETER column is not empty or zero in cable shapefiles.
     
     Args:
         workspace (str): Path to Comsof output directory
-        tolerance (float): Maximum allowed distance between points (in CRS units)
     """
-    print("\n🔍 Validating Feeder and Primary Distribution Point locations...")
+    print("\n🔍 Validating cable diameters...")
 
-    feeder_path = os.path.join(workspace, "OUT_FeederPoints.shp")
-    prim_path = os.path.join(workspace, "OUT_PrimDistributionPoints.shp")
+    cable_files = [
+        "OUT_DistributionCables.shp",
+        "OUT_FeederCables.shp",
+        "OUT_PrimDistributionCables.shp"
+    ]
 
-    # Check if files exist
-    if not os.path.exists(feeder_path):
-        print("⛔ Error: OUT_FeederPoints.shp not found")
-        return
-    if not os.path.exists(prim_path):
-        print("⛔ Error: OUT_PrimDistributionPoints.shp not found")
-        return
     try:
-        # Load shapefiles
-        feeder_points = gpd.read_file(feeder_path)
-        prim_points = gpd.read_file(prim_path)
+        any_errors = False
 
-        # Check if each file has exactly one point
-        if len(feeder_points) != 1:
-            print(f"⚠️ Warning: OUT_FeederPoints.shp has {len(feeder_points)} features (expected 1)")
-        if len(prim_points) != 1:
-            print(f"⚠️ Warning: OUT_PrimDistributionPoints.shp has {len(prim_points)} features (expected 1)")
+        for file in cable_files:
+            file_path = os.path.join(workspace, file)
 
-        if len(feeder_points) > 0 and len(prim_points) > 0:
-            # Get the first point from each file
-            feeder_geom = feeder_points.geometry.iloc[0]
-            prim_geom = prim_points.geometry.iloc[0]
+            if not os.path.exists(file_path):
+                print(f"⛔ Error: {file} not found in workspace")
+                any_errors = True
+                continue
 
-            # Calculate distance between points
-            distance = feeder_geom.distance(prim_geom)
+            gdf = gpd.read_file(file_path)
 
-            if distance < tolerance:
-                feeder_coords = (feeder_geom.x, feeder_geom.y)
-                prim_coords = (prim_geom.x, prim_geom.y)
+            if 'DIAMETER' not in gdf.columns:
+                print(f"⛔ Error: {file} is missing DIAMETER column")
+                any_errors = True
+                continue
 
-                print("\n⚠️  CRITICAL ISSUE: Feeder and Primary Distribution Points are too close!")
-                print(f"Distance between points: {distance:.6f} units (tolerance: {tolerance} units)")
-                print(f"Feeder Point location: X={feeder_coords[0]:.6f}, Y={feeder_coords[1]:.6f}")
-                print(f"Primary Distribution Point location: X={prim_coords[0]:.6f}, Y={prim_coords[1]:.6f}")
-                print("\n❌ These points should not be co-located. Please verify in GIS software.")
+            # Find invalid diameters (missing or zero)
+            invalid_mask = gdf['DIAMETER'].isna() | (gdf['DIAMETER'] == 0)
+            invalid_cables = gdf[invalid_mask]
+
+            if not invalid_cables.empty:
+                any_errors = True
+                print(f"\n❌ PROBLEM: Found {len(invalid_cables)} cables with invalid diameters in {file}")
+                print("Cables must have non-zero diameter values")
+
+                # Show sample of problematic cables
+                sample = invalid_cables[['CABLE_ID', 'DIAMETER']].head(5)
+                print("\nSample of problematic cables:")
+                print(sample.to_string(index=False))
             else:
-                print("\n✅ Validation passed - points are sufficiently separated")
-                print(f"Distance between points: {distance:.6f} units (minimum required: {tolerance} units)")
-        else:
-            print("\n⛔ Cannot perform validation - one or both files are empty")
+                print(f"\n✅ {file}: All cables have valid diameters")
+
+        if not any_errors:
+            print("\n✅ All cable files have valid diameter values")
 
     except Exception as e:
         print(f"⛔ Unexpected error: {e}")
