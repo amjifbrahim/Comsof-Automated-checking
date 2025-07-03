@@ -522,4 +522,16 @@ def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
         output.append(f"⛔ Unexpected error: {e}")
         return None, "\n".join(output)
 
-##
+#######################################################################################################
+def validate_cable_diameters(workspace):
+    """
+    Validates that DIAMETER column is not empty or zero in cable shapefiles.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+        
+    Returns:
+        tuple: (has_issues, message) where:
+            has_issues: True if problems found, False otherwise
+            message: Detailed validation results
+    """
