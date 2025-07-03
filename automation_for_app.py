@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields', 'validate_non_virtual_closures']
 
 
 
@@ -380,3 +380,71 @@ def check_granularity_fields(workspace):
     except Exception as e:
         output.append(f"⛔ Error checking granularity fields: {e}")
         return None, "\n".join(output)
+
+
+
+
+
+######################################################################################################
+
+def validate_non_virtual_closures(workspace):
+    """
+    Validates that PrimDistribution, Distribution, and Drop closures are not virtual.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+        
+    Returns:
+        tuple: (has_issues, message) where:
+            has_issues: True if problems found, False otherwise
+            message: Detailed validation results
+    """
+
+
+    output = ["🔍 Validating non-virtual closures..."]
+    try:
+        closure_path = os.path.join(workspace, "OUT_Closures.shp")
+        if not os.path.isfile(closure_path):
+            output.append(f"⛔ Error: OUT_Closures.shp not found in {workspace}")
+            return None, "\n".join(output)
+
+        closures = gpd.read_file(closure_path)
+
+        # Check required columns
+        required_cols = ['LAYER', 'VIRTUAL', 'EQ_ID']
+        missing = [c for c in required_cols if c not in closures.columns]
+        if missing:
+            output.append(f"⛔ Error: Missing required columns: {', '.join(missing)}")
+            return None, "\n".join(output)
+
+        # Find closures of the given types that are marked virtual (VIRTUAL == 1)
+        mask = (
+            closures['LAYER'].isin(['PrimDistribution', 'Distribution', 'Drop']) &
+            (closures['VIRTUAL'] == 1)
+        )
+        bad = closures[mask]
+
+        if not bad.empty:
+            output.append(f"❌ Found {len(bad)} closures incorrectly marked as virtual:")
+            output.append("These closure types should never be virtual:")
+            output.append("- PrimDistribution")
+            output.append("- Distribution")
+            output.append("- Drop\n")
+
+            # Report using EQ_ID
+            report = bad[['EQ_ID', 'LAYER', 'VIRTUAL']].copy()
+            report['VIRTUAL'] = report['VIRTUAL'].astype(int)
+            output.append(report.to_string(index=False))
+            has_issues = True
+        else:
+            output.append("✅ All PrimDistribution, Distribution, and Drop closures are non-virtual as expected.")
+            has_issues = False
+
+        return has_issues, "\n".join(output)
+
+    except Exception as e:
+        output.append(f"⛔ Unexpected error: {e}")
+        return None, "\n".join(output)
+
+
+

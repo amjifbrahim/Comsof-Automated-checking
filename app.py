@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, send_file, after_this_request
 from automation_for_app import (
     check_osc_duplicates, check_invalid_cable_refs,
     report_splice_counts_by_closure, process_shapefiles,
-    check_gistool_id, check_cluster_overlaps, check_granularity_fields
+    check_gistool_id, check_cluster_overlaps, check_granularity_fields, validate_non_virtual_closures
 )
 
 app = Flask(__name__)
@@ -85,12 +85,13 @@ def index():
             results = []
             checks = [
                 ("OSC Duplicates Check", check_osc_duplicates),
+                ("Cluster Overlap Check", check_cluster_overlaps),
+                ("Cable Granularity Check", check_granularity_fields),
+                ("Non-virtual Closure Validation", validate_non_virtual_closures),  # New check
                 ("Cable Reference Validation", check_invalid_cable_refs),
                 ("Shapefile Processing", process_shapefiles),
                 ("GISTOOL_ID Validation", check_gistool_id),
-                ("Splice Count Report", report_splice_counts_by_closure),
-                ("Cluster Overlaps Check", check_cluster_overlaps),
-                ("Granularity Fields Check", check_granularity_fields),
+                ("Splice Count Report", report_splice_counts_by_closure)
                 ]
             
             for name, func in checks:
