@@ -3,7 +3,8 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields', 'validate_non_virtual_closures']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 
+           'check_cluster_overlaps', 'check_granularity_fields', 'validate_non_virtual_closures', 'validate_feeder_primdistribution_locations']
 
 
 
@@ -446,5 +447,78 @@ def validate_non_virtual_closures(workspace):
         output.append(f"⛔ Unexpected error: {e}")
         return None, "\n".join(output)
 
+#######################################################################################################
 
+
+def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
+    """
+    Validates that Feeder Points and Primary Distribution Points are not co-located.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+        tolerance (float): Maximum allowed distance between points (in CRS units)
+        
+    Returns:
+        tuple: (has_issues, message) where:
+            has_issues: True if points are too close, False otherwise
+            message: Detailed validation results
+    """
+    output = []
+    has_issues = False
+    
+    try:
+        feeder_path = os.path.join(workspace, "OUT_FeederPoints.shp")
+        prim_path = os.path.join(workspace, "OUT_PrimDistributionPoints.shp")
+        
+        output.append("\n🔍 Validating Feeder and Primary Distribution Point locations...")
+        
+        # Check if files exist
+        if not os.path.exists(feeder_path):
+            output.append("⛔ Error: OUT_FeederPoints.shp not found")
+            return None, "\n".join(output)
+        if not os.path.exists(prim_path):
+            output.append("⛔ Error: OUT_PrimDistributionPoints.shp not found")
+            return None, "\n".join(output)
+        
+        # Load shapefiles
+        feeder_points = gpd.read_file(feeder_path)
+        prim_points = gpd.read_file(prim_path)
+        
+        # Check if each file has exactly one point
+        if len(feeder_points) != 1:
+            output.append(f"⚠️ Warning: OUT_FeederPoints.shp has {len(feeder_points)} features (expected 1)")
+        if len(prim_points) != 1:
+            output.append(f"⚠️ Warning: OUT_PrimDistributionPoints.shp has {len(prim_points)} features (expected 1)")
+        
+        if len(feeder_points) > 0 and len(prim_points) > 0:
+            # Get the first point from each file
+            feeder_geom = feeder_points.geometry.iloc[0]
+            prim_geom = prim_points.geometry.iloc[0]
+            
+            # Calculate distance between points
+            distance = feeder_geom.distance(prim_geom)
+            
+            if distance < tolerance:
+                has_issues = True
+                # Get coordinates for reporting
+                feeder_coords = (feeder_geom.x, feeder_geom.y)
+                prim_coords = (prim_geom.x, prim_geom.y)
+                
+                output.append("\n⚠️  CRITICAL ISSUE: Feeder and Primary Distribution Points are too close!")
+                output.append(f"Distance between points: {distance:.6f} units (tolerance: {tolerance} units)")
+                output.append(f"Feeder Point location: X={feeder_coords[0]:.6f}, Y={feeder_coords[1]:.6f}")
+                output.append(f"Primary Distribution Point location: X={prim_coords[0]:.6f}, Y={prim_coords[1]:.6f}")
+                output.append("\n❌ These points should not be co-located. Please verify in GIS software.")
+            else:
+                output.append("\n✅ Validation passed - points are sufficiently separated")
+                output.append(f"Distance between points: {distance:.6f} units (minimum required: {tolerance} units)")
+        else:
+            output.append("\n⛔ Cannot perform validation - one or both files are empty")
+            return None, "\n".join(output)
+        
+        return has_issues, "\n".join(output)
+        
+    except Exception as e:
+        output.append(f"⛔ Unexpected error: {e}")
+        return None, "\n".join(output)
 
