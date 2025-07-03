@@ -3,7 +3,7 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields', 'validate_non_virtual_closures']
 #########################################################################
 #######################check_invalid_cable_refs##########################
 #########################################################################
@@ -388,9 +388,9 @@ def check_cluster_overlaps(workspace, cluster_files=None):
         except Exception as e:
             print(f"⛔ Error processing {file}: {e}")
 
-#########################################################################
+#################################################################################
 ########################## check_granularity_fields #############################
-#########################################################################
+#################################################################################
 
 def check_granularity_fields(workspace):
     """
@@ -435,3 +435,64 @@ def check_granularity_fields(workspace):
             print(f"⛔ Error reading {file_path}: {e}")
 
 
+
+#################################################################################
+######################## validate_non_virtual_closures ##########################
+#################################################################################
+
+def validate_non_virtual_closures(workspace):
+    """
+    Validates that PrimDistribution, Distribution, and Drop closures are not virtual.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+    """
+    print("\n🔍 Validating non-virtual closures...")
+
+    closure_path = os.path.join(workspace, "OUT_Closures.shp")
+    
+    if not os.path.exists(closure_path):
+        print("⛔ Error: OUT_Closures.shp not found in the workspace")
+        return
+
+    try:
+        closures = gpd.read_file(closure_path)
+
+        # Check required columns
+        required_cols = ['LAYER', 'VIRTUAL']
+        missing_cols = [col for col in required_cols if col not in closures.columns]
+        if missing_cols:
+            print(f"⛔ Error: Missing required columns: {', '.join(missing_cols)}")
+            return
+
+        # Identify closures that should not be virtual
+        invalid_mask = (
+            closures['LAYER'].isin(['PrimDistribution', 'Distribution', 'Drop']) &
+            (closures['VIRTUAL'] == 1)
+        )
+        invalid_closures = closures[invalid_mask]
+
+        if not invalid_closures.empty:
+            print("\n⚠️  PROBLEM: Found non-virtual closures marked as virtual!")
+            print(f"Total invalid closures: {len(invalid_closures)}")
+            print("The following closure types should NEVER be virtual:")
+            print("  - PrimDistribution")
+            print("  - Distribution")
+            print("  - Drop")
+            print("\nInvalid closures:")
+            print("  ID      LAYER              VIRTUAL")
+            print("  ----    ----------------    -------")
+            for _, row in invalid_closures.iterrows():
+                closure_id = str(row.get('ID', 'N/A'))
+                layer = row['LAYER']
+                virtual = row['VIRTUAL']
+                print(f"  {closure_id:<8} {layer:<18} {virtual}")
+        else:
+            print("\n✅ Everything is okay - all non-virtual closure types are properly marked!")
+            print("Validated closure types:")
+            print("  - PrimDistribution")
+            print("  - Distribution")
+            print("  - Drop")
+
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
