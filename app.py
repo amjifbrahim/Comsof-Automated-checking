@@ -7,7 +7,8 @@ from automation_for_app import (
     check_osc_duplicates, check_invalid_cable_refs,
     report_splice_counts_by_closure, process_shapefiles,
     check_gistool_id, check_cluster_overlaps, check_granularity_fields, 
-    validate_non_virtual_closures, validate_feeder_primdistribution_locations
+    validate_non_virtual_closures, validate_feeder_primdistribution_locations,
+    validate_cable_diameters
 )
 
 app = Flask(__name__)
