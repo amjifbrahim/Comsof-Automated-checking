@@ -562,3 +562,67 @@ def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
 
     except Exception as e:
         print(f"⛔ Unexpected error: {e}")
+
+
+
+#################################################################################
+################ validate_feeder_primdistribution_locations #####################
+#################################################################################
+
+
+def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
+    """
+    Validates that Feeder Points and Primary Distribution Points are not co-located.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+        tolerance (float): Maximum allowed distance between points (in CRS units)
+    """
+    print("\n🔍 Validating Feeder and Primary Distribution Point locations...")
+
+    feeder_path = os.path.join(workspace, "OUT_FeederPoints.shp")
+    prim_path = os.path.join(workspace, "OUT_PrimDistributionPoints.shp")
+
+    # Check if files exist
+    if not os.path.exists(feeder_path):
+        print("⛔ Error: OUT_FeederPoints.shp not found")
+        return
+    if not os.path.exists(prim_path):
+        print("⛔ Error: OUT_PrimDistributionPoints.shp not found")
+        return
+    try:
+        # Load shapefiles
+        feeder_points = gpd.read_file(feeder_path)
+        prim_points = gpd.read_file(prim_path)
+
+        # Check if each file has exactly one point
+        if len(feeder_points) != 1:
+            print(f"⚠️ Warning: OUT_FeederPoints.shp has {len(feeder_points)} features (expected 1)")
+        if len(prim_points) != 1:
+            print(f"⚠️ Warning: OUT_PrimDistributionPoints.shp has {len(prim_points)} features (expected 1)")
+
+        if len(feeder_points) > 0 and len(prim_points) > 0:
+            # Get the first point from each file
+            feeder_geom = feeder_points.geometry.iloc[0]
+            prim_geom = prim_points.geometry.iloc[0]
+
+            # Calculate distance between points
+            distance = feeder_geom.distance(prim_geom)
+
+            if distance < tolerance:
+                feeder_coords = (feeder_geom.x, feeder_geom.y)
+                prim_coords = (prim_geom.x, prim_geom.y)
+
+                print("\n⚠️  CRITICAL ISSUE: Feeder and Primary Distribution Points are too close!")
+                print(f"Distance between points: {distance:.6f} units (tolerance: {tolerance} units)")
+                print(f"Feeder Point location: X={feeder_coords[0]:.6f}, Y={feeder_coords[1]:.6f}")
+                print(f"Primary Distribution Point location: X={prim_coords[0]:.6f}, Y={prim_coords[1]:.6f}")
+                print("\n❌ These points should not be co-located. Please verify in GIS software.")
+            else:
+                print("\n✅ Validation passed - points are sufficiently separated")
+                print(f"Distance between points: {distance:.6f} units (minimum required: {tolerance} units)")
+        else:
+            print("\n⛔ Cannot perform validation - one or both files are empty")
+
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
