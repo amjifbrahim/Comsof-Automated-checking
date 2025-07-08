@@ -3,7 +3,8 @@ import sys
 import os
 import pandas as pd
 
-__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 'check_granularity_fields']
+__all__ = ['check_osc_duplicates', 'check_invalid_cable_refs', 'report_splice_counts_by_closure', 'process_shapefiles', 'check_gistool_id', 'check_cluster_overlaps', 
+           'check_granularity_fields', 'validate_non_virtual_closures', 'validate_feeder_primdistribution_locations', 'validate_cable_diameters']
 #########################################################################
 #######################check_invalid_cable_refs##########################
 #########################################################################
@@ -388,9 +389,9 @@ def check_cluster_overlaps(workspace, cluster_files=None):
         except Exception as e:
             print(f"⛔ Error processing {file}: {e}")
 
-#########################################################################
+#################################################################################
 ########################## check_granularity_fields #############################
-#########################################################################
+#################################################################################
 
 def check_granularity_fields(workspace):
     """
@@ -435,3 +436,194 @@ def check_granularity_fields(workspace):
             print(f"⛔ Error reading {file_path}: {e}")
 
 
+
+#################################################################################
+######################## validate_non_virtual_closures ##########################
+#################################################################################
+
+def validate_non_virtual_closures(workspace):
+    """
+    Validates that PrimDistribution, Distribution, and Drop closures are not virtual.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+    """
+    print("\n🔍 Validating non-virtual closures...")
+
+    closure_path = os.path.join(workspace, "OUT_Closures.shp")
+    
+    if not os.path.exists(closure_path):
+        print("⛔ Error: OUT_Closures.shp not found in the workspace")
+        return
+
+    try:
+        closures = gpd.read_file(closure_path)
+
+        # Check required columns
+        required_cols = ['LAYER', 'VIRTUAL']
+        missing_cols = [col for col in required_cols if col not in closures.columns]
+        if missing_cols:
+            print(f"⛔ Error: Missing required columns: {', '.join(missing_cols)}")
+            return
+
+        # Identify closures that should not be virtual
+        invalid_mask = (
+            closures['LAYER'].isin(['PrimDistribution', 'Distribution', 'Drop']) &
+            (closures['VIRTUAL'] == 1)
+        )
+        invalid_closures = closures[invalid_mask]
+
+        if not invalid_closures.empty:
+            print("\n⚠️  PROBLEM: Found non-virtual closures marked as virtual!")
+            print(f"Total invalid closures: {len(invalid_closures)}")
+            print("The following closure types should NEVER be virtual:")
+            print("  - PrimDistribution")
+            print("  - Distribution")
+            print("  - Drop")
+            print("\nInvalid closures:")
+            print("  ID      LAYER              VIRTUAL")
+            print("  ----    ----------------    -------")
+            for _, row in invalid_closures.iterrows():
+                closure_id = str(row.get('ID', 'N/A'))
+                layer = row['LAYER']
+                virtual = row['VIRTUAL']
+                print(f"  {closure_id:<8} {layer:<18} {virtual}")
+        else:
+            print("\n✅ Everything is okay - all non-virtual closure types are properly marked!")
+            print("Validated closure types:")
+            print("  - PrimDistribution")
+            print("  - Distribution")
+            print("  - Drop")
+
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
+
+
+
+
+#################################################################################
+################ validate_feeder_primdistribution_locations #####################
+#################################################################################
+
+
+def validate_feeder_primdistribution_locations(workspace, tolerance=0.01):
+    """
+    Validates that Feeder Points and Primary Distribution Points are not co-located.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+        tolerance (float): Maximum allowed distance between points (in CRS units)
+    """
+    print("\n🔍 Validating Feeder and Primary Distribution Point locations...")
+
+    feeder_path = os.path.join(workspace, "OUT_FeederPoints.shp")
+    prim_path = os.path.join(workspace, "OUT_PrimDistributionPoints.shp")
+
+    # Check if files exist
+    if not os.path.exists(feeder_path):
+        print("⛔ Error: OUT_FeederPoints.shp not found")
+        return
+    if not os.path.exists(prim_path):
+        print("⛔ Error: OUT_PrimDistributionPoints.shp not found")
+        return
+    try:
+        # Load shapefiles
+        feeder_points = gpd.read_file(feeder_path)
+        prim_points = gpd.read_file(prim_path)
+
+        # Check if each file has exactly one point
+        if len(feeder_points) != 1:
+            print(f"⚠️ Warning: OUT_FeederPoints.shp has {len(feeder_points)} features (expected 1)")
+        if len(prim_points) != 1:
+            print(f"⚠️ Warning: OUT_PrimDistributionPoints.shp has {len(prim_points)} features (expected 1)")
+
+        if len(feeder_points) > 0 and len(prim_points) > 0:
+            # Get the first point from each file
+            feeder_geom = feeder_points.geometry.iloc[0]
+            prim_geom = prim_points.geometry.iloc[0]
+
+            # Calculate distance between points
+            distance = feeder_geom.distance(prim_geom)
+
+            if distance < tolerance:
+                feeder_coords = (feeder_geom.x, feeder_geom.y)
+                prim_coords = (prim_geom.x, prim_geom.y)
+
+                print("\n⚠️  CRITICAL ISSUE: Feeder and Primary Distribution Points are too close!")
+                print(f"Distance between points: {distance:.6f} units (tolerance: {tolerance} units)")
+                print(f"Feeder Point location: X={feeder_coords[0]:.6f}, Y={feeder_coords[1]:.6f}")
+                print(f"Primary Distribution Point location: X={prim_coords[0]:.6f}, Y={prim_coords[1]:.6f}")
+                print("\n❌ These points should not be co-located. Please verify in GIS software.")
+            else:
+                print("\n✅ Validation passed - points are sufficiently separated")
+                print(f"Distance between points: {distance:.6f} units (minimum required: {tolerance} units)")
+        else:
+            print("\n⛔ Cannot perform validation - one or both files are empty")
+
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
+
+
+
+#################################################################################
+########################### validate_cable_diameters ############################
+#################################################################################
+
+
+import os
+import geopandas as gpd
+
+def validate_cable_diameters(workspace):
+    """
+    Validates that DIAMETER column is not empty or zero in cable shapefiles.
+    
+    Args:
+        workspace (str): Path to Comsof output directory
+    """
+    print("\n🔍 Validating cable diameters...")
+
+    cable_files = [
+        "OUT_DistributionCables.shp",
+        "OUT_FeederCables.shp",
+        "OUT_PrimDistributionCables.shp"
+    ]
+
+    try:
+        any_errors = False
+
+        for file in cable_files:
+            file_path = os.path.join(workspace, file)
+
+            if not os.path.exists(file_path):
+                print(f"⛔ Error: {file} not found in workspace")
+                any_errors = True
+                continue
+
+            gdf = gpd.read_file(file_path)
+
+            if 'DIAMETER' not in gdf.columns:
+                print(f"⛔ Error: {file} is missing DIAMETER column")
+                any_errors = True
+                continue
+
+            # Find invalid diameters (missing or zero)
+            invalid_mask = gdf['DIAMETER'].isna() | (gdf['DIAMETER'] == 0)
+            invalid_cables = gdf[invalid_mask]
+
+            if not invalid_cables.empty:
+                any_errors = True
+                print(f"\n❌ PROBLEM: Found {len(invalid_cables)} cables with invalid diameters in {file}")
+                print("Cables must have non-zero diameter values")
+
+                # Show sample of problematic cables
+                sample = invalid_cables[['CABLE_ID', 'DIAMETER']].head(5)
+                print("\nSample of problematic cables:")
+                print(sample.to_string(index=False))
+            else:
+                print(f"\n✅ {file}: All cables have valid diameters")
+
+        if not any_errors:
+            print("\n✅ All cable files have valid diameter values")
+
+    except Exception as e:
+        print(f"⛔ Unexpected error: {e}")
