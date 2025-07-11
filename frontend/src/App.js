@@ -51,41 +51,63 @@ const ShapefileValidationApp = () => {
       return;
     }
 
+    // Check file size on client side (500MB limit)
+    const maxSize = 500 * 1024 * 1024; // 500MB
+    if (file.size > maxSize) {
+      setError(`File too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 500MB.`);
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    setResults(null); // Explicitly reset results
+    setResults(null);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      // Use different base URLs for development vs production
-      const baseUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:5000' 
-        : '';
-      
-      const response = await fetch(`${baseUrl}/validate`, {
+      const response = await fetch('/validate', {
         method: 'POST',
         body: formData,
-        // Don't set Content-Type header - let browser set it with boundary
       });
 
-      // Check for HTML response
+      // Check for HTML response (like 413 error pages)
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('text/html')) {
+        if (response.status === 413) {
+          throw new Error('File too large. The server cannot process files larger than 500MB. Please try a smaller file.');
+        }
         const text = await response.text();
-        throw new Error(`Server returned HTML: ${text.substring(0, 100)}...`);
+        throw new Error(`Server error: ${text.substring(0, 100)}...`);
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        if (response.status === 413) {
+          throw new Error('File too large. Maximum file size is 500MB.');
+        }
+        
+        // Try to get JSON error message
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        } catch {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
       }
 
       const data = await response.json();
       setResults(data);
     } catch (err) {
       console.error('Full error:', err);
-      setError(err.message);
+      
+      // Provide user-friendly error messages
+      if (err.message.includes('413') || err.message.includes('Request Entity Too Large')) {
+        setError('File too large. Please try a smaller file (maximum 500MB).');
+      } else if (err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }

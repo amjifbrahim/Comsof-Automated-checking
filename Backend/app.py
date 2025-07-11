@@ -3,6 +3,7 @@ import zipfile
 import tempfile
 import shutil
 from flask import Flask, request, jsonify, send_from_directory
+from werkzeug.exceptions import RequestEntityTooLarge
 from flask_cors import CORS
 from automation_for_app import (
     check_osc_duplicates, check_invalid_cable_refs,
@@ -12,9 +13,9 @@ from automation_for_app import (
     validate_cable_diameters
 )
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='build', static_url_path='')
 CORS(app)  # Enable CORS for React frontend
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB limit
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # Increased to 500MB
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 
 def extract_zip(zip_path, extract_to):
@@ -47,15 +48,18 @@ def extract_zip(zip_path, extract_to):
     
     return None
 
-@app.route('/')
-def serve_frontend():
-    """Serve the React app (you'll need to build and place it in a 'build' folder)"""
-    return send_from_directory('build', 'index.html')
+# Handle file too large error
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(error):
+    return jsonify({
+        'error': 'File too large. Maximum file size is 500MB. Please compress your file or split it into smaller parts.'
+    }), 413
 
 @app.route('/validate', methods=['POST'])
 def validate():
     """API endpoint for validation"""
     try:
+        # Check if file is in request
         if 'file' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
             
@@ -65,6 +69,16 @@ def validate():
             
         if not file.filename.endswith('.zip'):
             return jsonify({'error': 'File must be a ZIP archive'}), 400
+        
+        # Additional file size check before processing
+        file.seek(0, 2)  # Seek to end
+        file_size = file.tell()
+        file.seek(0)  # Reset to beginning
+        
+        if file_size > 500 * 1024 * 1024:  # 500MB
+            return jsonify({
+                'error': f'File too large ({file_size / (1024*1024):.1f}MB). Maximum size is 500MB.'
+            }), 413
         
         # Save uploaded file
         zip_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
@@ -93,7 +107,7 @@ def validate():
                 pass
             
             return jsonify({
-                'error': f"Could not find output folder in ZIP structure. Directory structure:\\n{'\\n'.join(tree)}"
+                'error': f"Could not find output folder in ZIP structure. Directory structure:\n{chr(10).join(tree)}"
             }), 400
         
         # Run validation checks
@@ -130,6 +144,10 @@ def validate():
             'filename': file.filename
         })
         
+    except RequestEntityTooLarge:
+        return jsonify({
+            'error': 'File too large. Maximum file size is 500MB.'
+        }), 413
     except Exception as e:
         return jsonify({'error': f'Processing error: {str(e)}'}), 500
 
@@ -138,11 +156,17 @@ def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy'})
 
-# Serve static files for React app
+# Serve React App - catch all route for React Router
+@app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
-def serve_static(path):
-    """Serve static files from React build"""
-    return send_from_directory('build', path)
+def serve_react_app(path):
+    """Serve React app files"""
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        # Serve static files (JS, CSS, images, etc.)
+        return send_from_directory(app.static_folder, path)
+    else:
+        # Serve index.html for all other routes (React Router)
+        return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
