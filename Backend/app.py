@@ -2,9 +2,19 @@ import os
 import zipfile
 import tempfile
 import shutil
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response
 from werkzeug.exceptions import RequestEntityTooLarge
 from flask_cors import CORS
+
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib import colors
+from datetime import datetime
+import io
+from pdf_styles import get_pdf_styles
+
 from automation_for_app import (
     check_osc_duplicates, check_invalid_cable_refs,
     report_splice_counts_by_closure, process_shapefiles,
@@ -167,6 +177,80 @@ def serve_react_app(path):
     else:
         # Serve index.html for all other routes (React Router)
         return send_from_directory(app.static_folder, 'index.html')
+
+
+
+
+# Export validation results as PDF
+
+@app.route('/export-pdf', methods=['POST'])
+def export_pdf():
+    """Export validation results as PDF"""
+    try:
+        data = request.get_json()
+        if not data or 'results' not in data:
+            return jsonify({'error': 'Invalid export request'}), 400
+        
+        # Get basic styles
+        styles = get_pdf_styles()
+        
+        # Create PDF in memory
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        elements = []
+        
+        # Add title
+        elements.append(Paragraph("Comsof Validation Report", styles['title']))
+        elements.append(Paragraph(f"File: {data.get('filename', 'Unknown')}", styles['filename']))
+        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['date']))
+        elements.append(Spacer(1, 24))
+        
+        # Add summary
+        passed = sum(1 for r in data['results'] if r[1] is False)
+        failed = sum(1 for r in data['results'] if r[1] is True)
+        errors = sum(1 for r in data['results'] if r[1] is None)
+        total = len(data['results'])
+        
+        summary_text = f"""
+        Validation Summary:
+        - Passed: {passed}
+        - Failed: {failed}
+        - Errors: {errors}
+        - Total: {total}
+        """
+        elements.append(Paragraph(summary_text, styles['normal']))
+        elements.append(Spacer(1, 24))
+        
+        # Add detailed results
+        elements.append(Paragraph("Detailed Results", styles['section']))
+        
+        for i, (name, status, message) in enumerate(data['results']):
+            # Add result header
+            status_text = "Passed" if status is False else "Failed" if status is True else "Error"
+            elements.append(Paragraph(f"{i+1}. {name} - {status_text}", styles['result_title']))
+            
+            # Clean and format message
+            clean_message = message.replace('\n', '<br/>')
+            elements.append(Paragraph(clean_message, styles['normal']))
+            
+            elements.append(Spacer(1, 12))
+        
+        # Generate PDF
+        doc.build(elements)
+        buffer.seek(0)
+        
+        # Prepare response
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"validation_report_{data.get('filename', timestamp).replace('.zip', '')}.pdf"
+        
+        return Response(
+            buffer,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment;filename={filename}"}
+        )
+        
+    except Exception as e:
+        return jsonify({'error': f'PDF export failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

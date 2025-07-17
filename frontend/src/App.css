@@ -36,3 +36,13 @@
     transform: rotate(360deg);
   }
 }
+
+/* Add to your App.css */
+@media (max-width: 640px) {
+  .flex-col-mobile {
+    flex-direction: column !important;
+  }
+  .space-y-4-mobile > * + * {
+    margin-top: 1rem;
+  }
+}

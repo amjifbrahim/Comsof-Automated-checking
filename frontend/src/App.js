@@ -8,6 +8,42 @@ const ShapefileValidationApp = () => {
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [validationRun, setValidationRun] = useState(false); // New state
+
+// Add PDF export function
+const handleExportPDF = async () => {
+  if (!results) return;
+
+  try {
+    const response = await fetch('/export-pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        results: results.results,
+        filename: results.filename
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'PDF export failed');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `validation_report_${results.filename.replace('.zip', '')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    setError(`Failed to export PDF: ${err.message}`);
+  }
+};
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -28,6 +64,8 @@ const ShapefileValidationApp = () => {
     if (droppedFile && droppedFile.name.endsWith('.zip')) {
       setFile(droppedFile);
       setError(null);
+      setResults(null);
+      setValidationRun(false);
     } else {
       setError("Please upload a ZIP file");
     }
@@ -39,6 +77,8 @@ const ShapefileValidationApp = () => {
       if (selectedFile.name.endsWith('.zip')) {
         setFile(selectedFile);
         setError(null);
+        setResults(null);
+        setValidationRun(false);
       } else {
         setError("File must be a ZIP archive");
       }
@@ -96,7 +136,9 @@ const ShapefileValidationApp = () => {
       }
 
       const data = await response.json();
+      //const data = await validateFile(file);
       setResults(data);
+      setValidationRun(true);  // Mark validation as run
     } catch (err) {
       console.error('Full error:', err);
       
@@ -110,6 +152,7 @@ const ShapefileValidationApp = () => {
       }
     } finally {
       setLoading(false);
+      //setIsProcessing(false);
     }
   };
 
@@ -288,23 +331,36 @@ const ShapefileValidationApp = () => {
               </div>
             )}
 
-            <button
-              onClick={handleSubmit}
-              disabled={!file || loading}
-              className="mt-6 inline-flex items-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Validating...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-5 h-5 mr-2" />
-                  Run Validation
-                </>
-              )}
-            </button>
+            <div className="mt-6 flex flex-col sm:flex-row justify-center items-center gap-4">
+              <button
+                onClick={handleSubmit}
+                disabled={!file || loading}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Run Validation
+                  </>
+                )}
+              </button>
+
+                {validationRun && (
+                <button
+                  onClick={handleExportPDF}
+                  className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors duration-200"
+                >
+                  <FileText className="w-5 h-5 mr-2" />
+                  Export PDF
+              </button>
+                )}
+            </div>
+
           </div>
         </div>
 
@@ -320,6 +376,7 @@ const ShapefileValidationApp = () => {
                 </h2>
               </div>
               
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center p-6 bg-green-50 rounded-lg border border-green-200">
                   <div className="text-3xl font-bold text-green-600 mb-2">
@@ -384,3 +441,5 @@ const ShapefileValidationApp = () => {
 };
 
 export default ShapefileValidationApp;
+
+

@@ -624,3 +624,4 @@ def validate_cable_diameters(workspace):
     except Exception as e:
         output.append(f"⛔ Unexpected error: {e}")
         return None, "\n".join(output)
+    
