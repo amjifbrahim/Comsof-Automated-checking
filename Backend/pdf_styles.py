@@ -55,5 +55,19 @@ def get_pdf_styles():
             fontSize=10,
             leading=14,
             textColor=colors.black
-        )
+        ),
+        'error': ParagraphStyle(
+            'Error',
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            textColor=colors.red
+        ),
+        'heading2': ParagraphStyle(
+            'Heading2',
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            spaceBefore=12,
+            spaceAfter=6,
+            textColor=colors.black
+        ),
     }

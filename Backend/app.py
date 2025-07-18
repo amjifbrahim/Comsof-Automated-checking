@@ -13,6 +13,7 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib import colors
 from datetime import datetime
 import io
+import json
 from pdf_styles import get_pdf_styles
 
 from automation_for_app import (
@@ -120,8 +121,59 @@ def validate():
                 'error': f"Could not find output folder in ZIP structure. Directory structure:\n{chr(10).join(tree)}"
             }), 400
         
-        # Run validation checks
+                # Get selected checks from form data
+        checks_json = request.form.get('checks', '[]')
+        try:
+            selected_checks = json.loads(checks_json)
+        except json.JSONDecodeError:
+            selected_checks = []
+        
+        # If no checks selected, use all checks as default
+        if not selected_checks:
+            selected_checks = [
+                "OSC Duplicates Check",
+                "Cluster Overlap Check",
+                "Cable Granularity Check",
+                "Non-virtual Closure Validation",
+                "Point Location Validation",
+                "Cable Diameter Validation",
+                "Cable Reference Validation",
+                "Shapefile Processing",
+                "GISTOOL_ID Validation",
+                "Splice Count Report"
+            ]
+        
+        # Mapping of check names to functions
+        CHECK_FUNCTIONS = {
+            "OSC Duplicates Check": check_osc_duplicates,
+            "Cluster Overlap Check": check_cluster_overlaps,
+            "Cable Granularity Check": check_granularity_fields,
+            "Non-virtual Closure Validation": validate_non_virtual_closures,
+            "Point Location Validation": validate_feeder_primdistribution_locations,
+            "Cable Diameter Validation": validate_cable_diameters,
+            "Cable Reference Validation": check_invalid_cable_refs,
+            "Shapefile Processing": process_shapefiles,
+            "GISTOOL_ID Validation": check_gistool_id,
+            "Splice Count Report": report_splice_counts_by_closure
+        }
+        
+        # Run only selected checks
         results = []
+        for check_name in selected_checks:
+            if check_name in CHECK_FUNCTIONS:
+                try:
+                    check_func = CHECK_FUNCTIONS[check_name]
+                    status, message = check_func(workspace)
+                    results.append([check_name, status, message])
+                except Exception as e:
+                    results.append([check_name, None, f"Error running check: {str(e)}"])
+            else:
+                results.append([check_name, None, "Check function not found"])
+    
+       
+        
+        # Run validation checks
+        '''results = []
         checks = [
             ("OSC Duplicates Check", check_osc_duplicates),
             ("Cluster Overlap Check", check_cluster_overlaps),
@@ -140,7 +192,7 @@ def validate():
                 result = func(workspace)
                 results.append([name, result[0], result[1]])
             except Exception as e:
-                results.append([name, None, f"Error running check: {str(e)}"])
+                results.append([name, None, f"Error running check: {str(e)}"])'''
         
         # Cleanup temporary files
         try:
@@ -191,6 +243,13 @@ def export_pdf():
         if not data or 'results' not in data:
             return jsonify({'error': 'Invalid export request'}), 400
         
+        # Add a section showing which checks were run
+        '''selected_checks = [check[0] for check in data['results']]
+        elements.append(Paragraph("Selected Checks:", styles['section']))
+        for check in selected_checks:
+            elements.append(Paragraph(f"- {check}", styles['normal']))
+        elements.append(Spacer(1, 12))'''
+        
         # Get basic styles
         styles = get_pdf_styles()
         
@@ -198,28 +257,22 @@ def export_pdf():
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
         elements = []
+        styles = get_pdf_styles()
         
-        # Add title
+        # Title and metadata
         elements.append(Paragraph("Comsof Validation Report", styles['title']))
-        elements.append(Paragraph(f"File: {data.get('filename', 'Unknown')}", styles['filename']))
-        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['date']))
+        elements.append(Spacer(1, 12))
+        elements.append(Paragraph(f"File: {data.get('filename', 'Unknown')}", styles['normal']))
+        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['normal']))
         elements.append(Spacer(1, 24))
         
-        # Add summary
-        passed = sum(1 for r in data['results'] if r[1] is False)
-        failed = sum(1 for r in data['results'] if r[1] is True)
-        errors = sum(1 for r in data['results'] if r[1] is None)
-        total = len(data['results'])
-        
-        summary_text = f"""
-        Validation Summary:
-        - Passed: {passed}
-        - Failed: {failed}
-        - Errors: {errors}
-        - Total: {total}
-        """
-        elements.append(Paragraph(summary_text, styles['normal']))
+        # Add section showing which checks were run
+        elements.append(Paragraph("Checks Performed:", styles['heading2']))
+        checks_run = [result[0] for result in data['results']]
+        checks_text = ", ".join(checks_run)
+        elements.append(Paragraph(checks_text, styles['normal']))
         elements.append(Spacer(1, 24))
+        
         
         # Add detailed results
         elements.append(Paragraph("Detailed Results", styles['section']))

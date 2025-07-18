@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, XCircle, Loader2, Download, AlertTriangle, Menu, Home, Info, Settings, HelpCircle } from 'lucide-react';
 
+
 const ShapefileValidationApp = () => {
   const [file, setFile] = useState(null);
   const [results, setResults] = useState(null);
@@ -9,6 +10,37 @@ const ShapefileValidationApp = () => {
   const [dragActive, setDragActive] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [validationRun, setValidationRun] = useState(false); // New state
+  const [selectedChecks, setSelectedChecks] = useState({
+  'OSC Duplicates Check': true,
+  'Cluster Overlap Check': true,
+  'Cable Granularity Check': true,
+  'Non-virtual Closure Validation': true,
+  'Point Location Validation': true,
+  'Cable Diameter Validation': true,
+  'Cable Reference Validation': true,
+  'Shapefile Processing': true,
+  'GISTOOL_ID Validation': true,
+  'Splice Count Report': true
+});
+
+// Add this function to handle checkbox changes
+const handleCheckboxChange = (checkName) => {
+  setSelectedChecks(prev => ({
+    ...prev,
+    [checkName]: !prev[checkName]
+  }));
+};
+
+// Add this function to toggle all checkboxes
+const toggleAllChecks = (selectAll) => {
+  const newState = {};
+  Object.keys(selectedChecks).forEach(key => {
+    newState[key] = selectAll;
+  });
+  setSelectedChecks(newState);
+};
+
+
 
 // Add PDF export function
 const handleExportPDF = async () => {
@@ -98,18 +130,29 @@ const handleExportPDF = async () => {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setResults(null);
+      // Get selected check names
+      const checksToRun = Object.entries(selectedChecks)
+        .filter(([_, isSelected]) => isSelected)
+        .map(([name]) => name);
 
-    const formData = new FormData();
-    formData.append('file', file);
+      if (checksToRun.length === 0) {
+        setError("Please select at least one check to run");
+        return;
+      }
 
-    try {
-      const response = await fetch('/validate', {
-        method: 'POST',
-        body: formData,
-      });
+      setLoading(true);
+      setError(null);
+      setResults(null);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('checks', JSON.stringify(checksToRun));
+
+      try {
+        const response = await fetch('/validate', {
+          method: 'POST',
+          body: formData,
+        });
 
       // Check for HTML response (like 413 error pages)
       const contentType = response.headers.get('content-type');
@@ -330,6 +373,47 @@ const handleExportPDF = async () => {
                 </div>
               </div>
             )}
+
+            {/*Add this component to your UI (after file selection but before Run Validation button)*/}
+          <div className="mt-6 bg-gray-50 rounded-lg p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-medium text-gray-700">Select Checks to Run:</h3>
+              <div className="flex space-x-2">
+                <button 
+                  onClick={() => toggleAllChecks(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  Select All
+                </button>
+                <button 
+                  onClick={() => toggleAllChecks(false)}
+                  className="text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {Object.entries(selectedChecks).map(([checkName, isChecked]) => (
+                <div key={checkName} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id={`check-${checkName}`}
+                    checked={isChecked}
+                    onChange={() => handleCheckboxChange(checkName)}
+                    className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                  />
+                  <label 
+                    htmlFor={`check-${checkName}`} 
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    {checkName}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
 
             <div className="mt-6 flex flex-col sm:flex-row justify-center items-center gap-4">
               <button
