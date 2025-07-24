@@ -6,7 +6,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/build/$1"
+      "dest": "/Backend/build/$1"
     },
     {
       "handle": "filesystem"
