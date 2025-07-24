@@ -1,21 +1,20 @@
+from flask import Flask, request, jsonify, Response
 import os
 import zipfile
 import tempfile
 import shutil
-from flask import Flask, request, jsonify, send_from_directory, Response
+import io
+import json
+from datetime import datetime
 from werkzeug.exceptions import RequestEntityTooLarge
-from flask_cors import CORS
 
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib import colors
-from datetime import datetime
-import io
-import json
-from pdf_styles import get_pdf_styles
 
+# Import your validation functions
 from automation_for_app import (
     check_osc_duplicates, check_invalid_cable_refs,
     report_splice_counts_by_closure, process_shapefiles,
@@ -24,51 +23,65 @@ from automation_for_app import (
     validate_cable_diameters
 )
 
-app = Flask(__name__, static_folder='build', static_url_path='')
-CORS(app)  # Enable CORS for React frontend
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # Increased to 500MB
-app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
+# Note: You'll need to create this module separately
+from pdf_styles import get_pdf_styles
 
-def extract_zip(zip_path, extract_to):
-    """Extract zip file and find the output directory"""
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_to)
-    
-    # Look for the output directory in the expected structure
-    base_dir = None
-    
-    # 1. Check for MRO_* directories
-    for name in os.listdir(extract_to):
-        if name.startswith('MRO_') and os.path.isdir(os.path.join(extract_to, name)):
-            base_dir = os.path.join(extract_to, name)
-            break
-    
-    # 2. If no MRO_* directory found, check for output directly
-    if not base_dir:
-        base_dir = extract_to
-    
-    # 3. Look for output directory
-    output_dir = os.path.join(base_dir, 'output')
-    if os.path.exists(output_dir) and os.path.isdir(output_dir):
-        return output_dir
-    
-    # 4. Fallback: check if any subdirectory contains OUT_Closures.shp
-    for root, dirs, files in os.walk(base_dir):
-        if 'OUT_Closures.shp' in files:
-            return root
-    
-    return None
+app = Flask(__name__)
 
-# Handle file too large error
-@app.errorhandler(RequestEntityTooLarge)
-def handle_file_too_large(error):
-    return jsonify({
-        'error': 'File too large. Maximum file size is 500MB. Please compress your file or split it into smaller parts.'
-    }), 413
+# Reduced file size limit for serverless environment
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB (Vercel has limits)
 
-@app.route('/validate', methods=['POST'])
-def validate():
-    """API endpoint for validation"""
+def extract_zip_from_bytes(zip_data):
+    """Extract zip file from bytes data and find the output directory"""
+    # Create a temporary directory
+    extract_dir = tempfile.mkdtemp()
+    
+    try:
+        # Write zip data to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
+            temp_zip.write(zip_data)
+            temp_zip_path = temp_zip.name
+        
+        # Extract zip file
+        with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_dir)
+        
+        # Clean up temp zip file
+        os.unlink(temp_zip_path)
+        
+        # Look for the output directory in the expected structure
+        base_dir = None
+        
+        # 1. Check for MRO_* directories
+        for name in os.listdir(extract_dir):
+            if name.startswith('MRO_') and os.path.isdir(os.path.join(extract_dir, name)):
+                base_dir = os.path.join(extract_dir, name)
+                break
+        
+        # 2. If no MRO_* directory found, check for output directly
+        if not base_dir:
+            base_dir = extract_dir
+        
+        # 3. Look for output directory
+        output_dir = os.path.join(base_dir, 'output')
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            return output_dir, extract_dir
+        
+        # 4. Fallback: check if any subdirectory contains OUT_Closures.shp
+        for root, dirs, files in os.walk(base_dir):
+            if 'OUT_Closures.shp' in files:
+                return root, extract_dir
+        
+        return None, extract_dir
+        
+    except Exception as e:
+        # Clean up on error
+        if os.path.exists(extract_dir):
+            shutil.rmtree(extract_dir, ignore_errors=True)
+        raise e
+
+def validate_handler():
+    """Main validation handler"""
     try:
         # Check if file is in request
         if 'file' not in request.files:
@@ -81,23 +94,17 @@ def validate():
         if not file.filename.endswith('.zip'):
             return jsonify({'error': 'File must be a ZIP archive'}), 400
         
-        # Additional file size check before processing
-        file.seek(0, 2)  # Seek to end
-        file_size = file.tell()
-        file.seek(0)  # Reset to beginning
+        # Read file data into memory
+        file_data = file.read()
+        file_size = len(file_data)
         
-        if file_size > 500 * 1024 * 1024:  # 500MB
+        if file_size > MAX_FILE_SIZE:
             return jsonify({
-                'error': f'File too large ({file_size / (1024*1024):.1f}MB). Maximum size is 500MB.'
+                'error': f'File too large ({file_size / (1024*1024):.1f}MB). Maximum size is 50MB for serverless deployment.'
             }), 413
         
-        # Save uploaded file
-        zip_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(zip_path)
-        
-        # Create temp directory for extraction
-        extract_dir = tempfile.mkdtemp()
-        workspace = extract_zip(zip_path, extract_dir)
+        # Extract zip from memory
+        workspace, extract_dir = extract_zip_from_bytes(file_data)
         
         if not workspace:
             # Generate directory tree for debugging
@@ -111,17 +118,13 @@ def validate():
                     tree.append(f'{subindent}{f}')
             
             # Cleanup
-            try:
-                os.remove(zip_path)
-                shutil.rmtree(extract_dir)
-            except:
-                pass
+            shutil.rmtree(extract_dir, ignore_errors=True)
             
             return jsonify({
                 'error': f"Could not find output folder in ZIP structure. Directory structure:\n{chr(10).join(tree)}"
             }), 400
         
-                # Get selected checks from form data
+        # Get selected checks from form data
         checks_json = request.form.get('checks', '[]')
         try:
             selected_checks = json.loads(checks_json)
@@ -169,86 +172,24 @@ def validate():
                     results.append([check_name, None, f"Error running check: {str(e)}"])
             else:
                 results.append([check_name, None, "Check function not found"])
-    
-       
-        
-        # Run validation checks
-        '''results = []
-        checks = [
-            ("OSC Duplicates Check", check_osc_duplicates),
-            ("Cluster Overlap Check", check_cluster_overlaps),
-            ("Cable Granularity Check", check_granularity_fields),
-            ("Non-virtual Closure Validation", validate_non_virtual_closures),
-            ("Point Location Validation", validate_feeder_primdistribution_locations),
-            ("Cable Diameter Validation", validate_cable_diameters),
-            ("Cable Reference Validation", check_invalid_cable_refs),
-            ("Shapefile Processing", process_shapefiles),
-            ("GISTOOL_ID Validation", check_gistool_id),
-            ("Splice Count Report", report_splice_counts_by_closure)
-        ]
-        
-        for name, func in checks:
-            try:
-                result = func(workspace)
-                results.append([name, result[0], result[1]])
-            except Exception as e:
-                results.append([name, None, f"Error running check: {str(e)}"])'''
         
         # Cleanup temporary files
-        try:
-            os.remove(zip_path)
-            shutil.rmtree(extract_dir)
-        except Exception as e:
-            app.logger.error(f"Cleanup error: {e}")
+        shutil.rmtree(extract_dir, ignore_errors=True)
         
         return jsonify({
             'results': results,
             'filename': file.filename
         })
         
-    except RequestEntityTooLarge:
-        return jsonify({
-            'error': 'File too large. Maximum file size is 500MB.'
-        }), 413
     except Exception as e:
         return jsonify({'error': f'Processing error: {str(e)}'}), 500
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({'status': 'healthy'})
-
-# Serve React App - catch all route for React Router
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_react_app(path):
-    """Serve React app files"""
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        # Serve static files (JS, CSS, images, etc.)
-        return send_from_directory(app.static_folder, path)
-    else:
-        # Serve index.html for all other routes (React Router)
-        return send_from_directory(app.static_folder, 'index.html')
-
-
-
-
-# Export validation results as PDF
-
-@app.route('/export-pdf', methods=['POST'])
-def export_pdf():
-    """Export validation results as PDF"""
+def export_pdf_handler():
+    """PDF export handler"""
     try:
         data = request.get_json()
         if not data or 'results' not in data:
             return jsonify({'error': 'Invalid export request'}), 400
-        
-        # Add a section showing which checks were run
-        '''selected_checks = [check[0] for check in data['results']]
-        elements.append(Paragraph("Selected Checks:", styles['section']))
-        for check in selected_checks:
-            elements.append(Paragraph(f"- {check}", styles['normal']))
-        elements.append(Spacer(1, 12))'''
         
         # Get basic styles
         styles = get_pdf_styles()
@@ -257,7 +198,6 @@ def export_pdf():
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
         elements = []
-        styles = get_pdf_styles()
         
         # Title and metadata
         elements.append(Paragraph("Comsof Validation Report", styles['title']))
@@ -272,7 +212,6 @@ def export_pdf():
         checks_text = ", ".join(checks_run)
         elements.append(Paragraph(checks_text, styles['normal']))
         elements.append(Spacer(1, 24))
-        
         
         # Add detailed results
         elements.append(Paragraph("Detailed Results", styles['section']))
@@ -297,7 +236,7 @@ def export_pdf():
         filename = f"validation_report_{data.get('filename', timestamp).replace('.zip', '')}.pdf"
         
         return Response(
-            buffer,
+            buffer.getvalue(),
             mimetype="application/pdf",
             headers={"Content-Disposition": f"attachment;filename={filename}"}
         )
@@ -305,5 +244,28 @@ def export_pdf():
     except Exception as e:
         return jsonify({'error': f'PDF export failed: {str(e)}'}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+def health_handler():
+    """Health check handler"""
+    return jsonify({'status': 'healthy'})
+
+# Main handler function for Vercel
+def handler(request):
+    """Main serverless handler for Vercel"""
+    with app.test_request_context(
+        path=request.url.path,
+        method=request.method,
+        headers=request.headers,
+        data=request.get_data(),
+        query_string=request.url.query
+    ):
+        try:
+            if request.method == 'POST' and request.url.path == '/api/validate':
+                return validate_handler()
+            elif request.method == 'POST' and request.url.path == '/api/export-pdf':
+                return export_pdf_handler()
+            elif request.method == 'GET' and request.url.path == '/api/health':
+                return health_handler()
+            else:
+                return jsonify({'error': 'Endpoint not found'}), 404
+        except Exception as e:
+            return jsonify({'error': f'Server error: {str(e)}'}), 500

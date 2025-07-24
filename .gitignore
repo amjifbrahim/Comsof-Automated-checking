@@ -18,7 +18,7 @@ __pycache__/
 *.geojsons
 
 config/secrets.yml
-
+app.py
 *.pyc
 *.pyo
 *.pyd
