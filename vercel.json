@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "Backend/api/*.py": {
-      "maxDuration": 300
-    }
-  },
   "routes": [
     {
       "src": "Backend/api/(.*)",
