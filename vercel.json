@@ -1,17 +1,12 @@
 {
-  "builds": [
-    {
-      "src": "api/*.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "build/**",
-      "use": "@vercel/static"
+  "functions": {
+    "api/*.py": {
+      "maxDuration": 300
     }
-  ],
+  },
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "Backend/api/(.*)",
       "dest": "/api/$1"
     },
     {
@@ -26,11 +21,6 @@
       "dest": "/build/index.html"
     }
   ],
-  "functions": {
-    "api/*.py": {
-      "maxDuration": 300
-    }
-  },
   "env": {
     "PYTHONPATH": "./"
   }
