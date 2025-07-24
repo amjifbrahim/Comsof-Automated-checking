@@ -1,14 +1,38 @@
 {
+  "version": 2,
   "builds": [
     {
-      "src": "Backend/app.py",
+      "src": "api/*.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "build/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "Backend/app.py"
+      "dest": "/build/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/build/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/*.py": {
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "PYTHONPATH": "./"
+  }
 }
