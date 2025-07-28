@@ -47,7 +47,7 @@ const handleExportPDF = async () => {
   if (!results) return;
 
   try {
-    const response = await fetch('/export-pdf', {
+    const response = await fetch('/api/export-pdf', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -149,7 +149,7 @@ const handleExportPDF = async () => {
       formData.append('checks', JSON.stringify(checksToRun));
 
       try {
-        const response = await fetch('/validate', {
+        const response = await fetch('api/validate', {
           method: 'POST',
           body: formData,
         });
