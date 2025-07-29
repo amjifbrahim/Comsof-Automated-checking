@@ -72,15 +72,31 @@ def extract_zip_from_bytes(zip_data):
             shutil.rmtree(extract_dir, ignore_errors=True)
         raise e
 
-def handler(request):
-    """Serverless handler for file validation"""
+def handler(request, context=None):
+    """Vercel serverless handler for file validation"""
+    
+    # Handle CORS preflight requests
+    if request.method == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Content-Type': 'application/json'
+            },
+            'body': ''
+        }
     
     # Only allow POST requests
     if request.method != 'POST':
         return {
             'statusCode': 405,
             'body': json.dumps({'error': 'Method not allowed'}),
-            'headers': {'Content-Type': 'application/json'}
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         }
     
     try:
@@ -90,11 +106,17 @@ def handler(request):
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'Invalid content type. Expected multipart/form-data'}),
-                'headers': {'Content-Type': 'application/json'}
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             }
         
-        # Get request body
-        body = request.get_data()
+        # Get request body - Vercel provides this as request.body
+        if hasattr(request, 'body'):
+            body = request.body
+        else:
+            body = request.get_data()
         
         # Parse multipart form data
         try:
@@ -103,7 +125,10 @@ def handler(request):
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': f'Failed to parse form data: {str(e)}'}),
-                'headers': {'Content-Type': 'application/json'}
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             }
         
         # Extract file data
@@ -111,7 +136,10 @@ def handler(request):
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'No file uploaded'}),
-                'headers': {'Content-Type': 'application/json'}
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             }
         
         file_info = form_data['file']
@@ -122,7 +150,10 @@ def handler(request):
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'File must be a ZIP archive'}),
-                'headers': {'Content-Type': 'application/json'}
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             }
         
         file_size = len(file_data)
@@ -132,7 +163,10 @@ def handler(request):
                 'body': json.dumps({
                     'error': f'File too large ({file_size / (1024*1024):.1f}MB). Maximum size is 50MB for serverless deployment.'
                 }),
-                'headers': {'Content-Type': 'application/json'}
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             }
         
         # Extract checks data
@@ -162,7 +196,10 @@ def handler(request):
                 'body': json.dumps({
                     'error': f"Could not find output folder in ZIP structure. Directory structure:\n{chr(10).join(tree)}"
                 }),
-                'headers': {'Content-Type': 'application/json'}
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             }
         
         # Parse selected checks
@@ -222,12 +259,18 @@ def handler(request):
                 'results': results,
                 'filename': filename
             }),
-            'headers': {'Content-Type': 'application/json'}
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         }
         
     except Exception as e:
         return {
             'statusCode': 500,
             'body': json.dumps({'error': f'Processing error: {str(e)}'}),
-            'headers': {'Content-Type': 'application/json'}
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         }

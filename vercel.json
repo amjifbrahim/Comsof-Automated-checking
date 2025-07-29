@@ -1,22 +1,35 @@
 {
-  "routes": [
-    {
-      "src": "Backend/api/(.*)",
-      "dest": "/api/$1"
+  "functions": {
+    "api/validate.py": {
+      "runtime": "python3.9",
+      "maxDuration": 60
     },
-    {
-      "src": "/(.*)",
-      "dest": "/Backend/build/$1"
+    "api/export-pdf.py": {
+      "runtime": "python3.9",
+      "maxDuration": 30
     },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/Backend/build/index.html"
+    "api/health.py": {
+      "runtime": "python3.9",
+      "maxDuration": 10
     }
-  ],
-  "env": {
-    "PYTHONPATH": "./"
-  }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type"
+        }
+      ]
+    }
+  ]
 }

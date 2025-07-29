@@ -52,20 +52,40 @@ except ImportError:
             )
         }
 
-def handler(request):
-    """Serverless handler for PDF export"""
+def handler(request, context=None):
+    """Vercel serverless handler for PDF export"""
+    
+    # Handle CORS preflight requests
+    if request.method == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Content-Type': 'application/json'
+            },
+            'body': ''
+        }
     
     # Only allow POST requests
     if request.method != 'POST':
         return {
             'statusCode': 405,
             'body': json.dumps({'error': 'Method not allowed'}),
-            'headers': {'Content-Type': 'application/json'}
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         }
     
     try:
-        # Parse JSON request body
-        body = request.get_data()
+        # Parse JSON request body - handle both request.body and request.get_data()
+        if hasattr(request, 'body'):
+            body = request.body
+        else:
+            body = request.get_data()
+            
         if isinstance(body, bytes):
             body = body.decode('utf-8')
         
@@ -75,7 +95,10 @@ def handler(request):
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'Invalid export request'}),
-                'headers': {'Content-Type': 'application/json'}
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
             }
         
         # Get PDF styles
@@ -134,12 +157,18 @@ def handler(request):
                 'pdf': pdf_base64,
                 'filename': filename
             }),
-            'headers': {'Content-Type': 'application/json'}
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         }
         
     except Exception as e:
         return {
             'statusCode': 500,
             'body': json.dumps({'error': f'PDF export failed: {str(e)}'}),
-            'headers': {'Content-Type': 'application/json'}
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         }
