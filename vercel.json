@@ -1,13 +1,13 @@
 {
   "functions": {
     "Backend/api/validate.py": {
-      "runtime": "@vercel/python"
+      "runtime": "python@3.9"
     },
     "Backend/api/export-pdf.py": {
-      "runtime": "@vercel/python"
+      "runtime": "python@3.9"
     },
     "Backend/api/health.py": {
-      "runtime": "@vercel/python"
+      "runtime": "python@3.9"
     }
   },
   "routes": [
