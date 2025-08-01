@@ -1,13 +1,27 @@
 {
   "functions": {
-    "Backend/api/*.py": {
-      "runtime": "python3.9"
+    "Backend/api/validate.py": {
+      "runtime": "@vercel/python"
+    },
+    "Backend/api/export-pdf.py": {
+      "runtime": "@vercel/python"
+    },
+    "Backend/api/health.py": {
+      "runtime": "@vercel/python"
     }
   },
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/Backend/api/$1.py"
+      "src": "/api/validate",
+      "dest": "/Backend/api/validate.py"
+    },
+    {
+      "src": "/api/export-pdf",
+      "dest": "/Backend/api/export-pdf.py"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/Backend/api/health.py"
     },
     {
       "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg)$)",
