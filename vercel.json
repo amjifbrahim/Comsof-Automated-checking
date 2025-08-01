@@ -1,13 +1,13 @@
 {
   "functions": {
     "Backend/api/validate.py": {
-      "runtime": "python@3.9"
+      "runtime": "python3.9"
     },
     "Backend/api/export-pdf.py": {
-      "runtime": "python@3.9"
+      "runtime": "python3.9"
     },
     "Backend/api/health.py": {
-      "runtime": "python@3.9"
+      "runtime": "python3.9"
     }
   },
   "routes": [
