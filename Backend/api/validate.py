@@ -75,8 +75,13 @@ def extract_zip_from_bytes(zip_data):
 def handler(request, context=None):
     """Vercel serverless handler for file validation"""
     
+    # Get HTTP method - handle different request object types
+    method = getattr(request, 'method', 'GET')
+    if hasattr(request, 'environ'):
+        method = request.environ.get('REQUEST_METHOD', method)
+    
     # Handle CORS preflight requests
-    if request.method == 'OPTIONS':
+    if method == 'OPTIONS':
         return {
             'statusCode': 200,
             'headers': {
@@ -89,10 +94,10 @@ def handler(request, context=None):
         }
     
     # Only allow POST requests
-    if request.method != 'POST':
+    if method != 'POST':
         return {
             'statusCode': 405,
-            'body': json.dumps({'error': 'Method not allowed'}),
+            'body': json.dumps({'error': f'Method {method} not allowed. Only POST is supported.'}),
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
@@ -100,8 +105,13 @@ def handler(request, context=None):
         }
     
     try:
-        # Parse multipart form data
-        content_type = request.headers.get('content-type', '')
+        # Get headers - handle different request object types
+        headers = getattr(request, 'headers', {})
+        if hasattr(request, 'environ'):
+            content_type = request.environ.get('CONTENT_TYPE', '')
+        else:
+            content_type = headers.get('content-type', headers.get('Content-Type', ''))
+        
         if 'multipart/form-data' not in content_type:
             return {
                 'statusCode': 400,
@@ -112,11 +122,24 @@ def handler(request, context=None):
                 }
             }
         
-        # Get request body - Vercel provides this as request.body
+        # Get request body - handle different request object types
+        body = None
         if hasattr(request, 'body'):
             body = request.body
-        else:
+        elif hasattr(request, 'get_data'):
             body = request.get_data()
+        elif hasattr(request, 'read'):
+            body = request.read()
+        
+        if not body:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'No request body found'}),
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            }
         
         # Parse multipart form data
         try:
