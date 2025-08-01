@@ -1,18 +1,35 @@
 {
-  "functions": {
-    "Backend/api/validate.py": {
-      "runtime": "python@3.9",
-      "includeFiles": "Backend/**"
+  "version": 2,
+  "builds": [
+    {
+      "src": "Backend/api/validate.py",
+      "use": "@vercel/python",
+      "config": { 
+        "maxLambdaSize": "50mb",
+        "runtime": "python3.9"
+      }
     },
-    "Backend/api/export-pdf.py": {
-      "runtime": "python@3.9",
-      "includeFiles": "Backend/**"
+    {
+      "src": "Backend/api/export-pdf.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb",
+        "runtime": "python3.9"
+      }
     },
-    "Backend/api/health.py": {
-      "runtime": "python@3.9",
-      "includeFiles": "Backend/**"
+    {
+      "src": "Backend/api/health.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb",
+        "runtime": "python3.9"
+      }
+    },
+    {
+      "src": "Backend/build/**",
+      "use": "@vercel/static"
     }
-  },
+  ],
   "routes": [
     {
       "src": "/api/validate",
@@ -27,15 +44,8 @@
       "dest": "/Backend/api/health.py"
     },
     {
-      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg)$)",
-      "dest": "/Backend/build/$1"
-    },
-    {
       "src": "/(.*)",
       "dest": "/Backend/build/index.html"
     }
-  ],
-  "env": {
-    "PYTHONPATH": "./"
-  }
+  ]
 }
