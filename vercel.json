@@ -13,26 +13,26 @@
   "routes": [
     {
       "src": "/api/validate",
-      "dest": "/Backend/api/validate.py"
+      "dest": "Backend/api/validate.py"
     },
     {
       "src": "/api/export-pdf",
-      "dest": "/Backend/api/export-pdf.py"
+      "dest": "Backend/api/export-pdf.py"
     },
     {
       "src": "/api/health",
-      "dest": "/Backend/api/health.py"
+      "dest": "Backend/api/health.py"
     },
     {
-      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg)$)",
-      "dest": "/Backend/build/$1"
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg))$",
+      "dest": "frontend/build/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/Backend/build/index.html"
+      "dest": "frontend/build/index.html"
     }
   ],
   "env": {
-    "PYTHONPATH": "./"
+    "PYTHONPATH": "./Backend"
   }
 }
